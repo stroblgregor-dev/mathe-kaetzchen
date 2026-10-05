@@ -63,7 +63,7 @@
     { id: "eyepatch",  slot: "face",  name: "Augenklappe",     price: 12, emoji: "🏴‍☠️" },
     // Hals
     { id: "scarf",     slot: "neck",  name: "Schal",           price: 10, emoji: "🧣" },
-    { id: "bowtie",    slot: "neck",  name: "Fliege",          price: 10, emoji: "🎩" },
+    { id: "bowtie",    slot: "neck",  name: "Fliege",          price: 10, emoji: "🤵" },
     { id: "bell",      slot: "neck",  name: "Glöckchen",       price: 12, emoji: "🔔" },
     { id: "pearls",    slot: "neck",  name: "Perlenkette",     price: 16, emoji: "📿" },
     // Kleidung

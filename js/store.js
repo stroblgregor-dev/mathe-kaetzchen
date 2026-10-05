@@ -71,7 +71,7 @@
   function stats(pid) {
     const db = load();
     const mine = db.attempts.filter((a) => a.profile_id === pid);
-    const since = isoDay(new Date(Date.now() - 29 * 86400000));
+    const sd = new Date(); sd.setDate(sd.getDate() - 29); const since = isoDay(sd);
     const modules = {};
     mine.filter((a) => a.day >= since).forEach((a) => {
       const m = modules[a.module] || (modules[a.module] = { n: 0, first_try: 0, correct: 0 });
@@ -80,7 +80,7 @@
     const sorted = Object.fromEntries(Object.entries(modules).sort((a, b) => b[1].n - a[1].n));
     const days = [];
     for (let i = 13; i >= 0; i--) {
-      const d = isoDay(new Date(Date.now() - i * 86400000));
+      const dd = new Date(); dd.setDate(dd.getDate() - i); const d = isoDay(dd);
       const list = mine.filter((a) => a.day === d);
       days.push({ day: d, n: list.length, first_try: list.filter((a) => a.first_try).length });
     }

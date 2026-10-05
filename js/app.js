@@ -22,7 +22,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const today = () => isoDay(new Date());
-  const yesterday = () => isoDay(new Date(Date.now() - 86400000));
+  const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return isoDay(d); };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
 
@@ -31,6 +31,7 @@
     const headers = Object.assign({}, opts.headers || {});
     if (S.pin) headers["X-PIN"] = S.pin;
     if (opts.json !== undefined) opts.body = JSON.stringify(opts.json);
+    if (saveTimer && !/\/state$/.test(path)) await flushSave();
     return window.LocalAPI(path, { method: opts.method, headers, body: opts.body });
   }
 
@@ -115,8 +116,17 @@
   let saveTimer = null;
   function saveState() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => api(`/api/profiles/${S.profile.id}/state`, { json: { state: st() } }).catch(() => toast("Speichern hat nicht geklappt – ist der Handy-Speicher voll?")), 300);
+    saveTimer = setTimeout(flushSave, 300);
   }
+  function flushSave() {
+    clearTimeout(saveTimer); saveTimer = null;
+    if (!S.profile) return Promise.resolve();
+    return api(`/api/profiles/${S.profile.id}/state`, { json: { state: st() } }).catch(() => toast("Speichern hat nicht geklappt – ist der Handy-Speicher voll?"));
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden && saveTimer) flushSave(); });
+  window.addEventListener("pagehide", () => { if (saveTimer) flushSave(); });
+  // (6) Serie nur zählen, wenn gestern oder heute geübt wurde
+  function curStreak() { const s = st(); return s.last_day === today() || s.last_day === yesterday() ? s.streak : 0; }
   function favCat() {
     const s = st();
     const own = s.cats.find((c) => c.id === s.fav) || s.cats[0];
@@ -195,7 +205,7 @@
       <button class="who" data-act="nav" data-v="cats">${catSVG(favCat().def, { cls: "cat-xs" })}<span>${esc(S.profile.name)}</span></button>
       <div class="pills">
         <span class="pill fish" title="Fischlein">🐟 <b>${s.fish}</b></span>
-        <span class="pill streak" title="Tage hintereinander">🔥 <b>${s.streak}</b></span>
+        <span class="pill streak" title="Tage hintereinander">🔥 <b>${curStreak()}</b></span>
         <button class="pill icon" data-act="mute" aria-label="Ton">${S.muted ? "🔇" : "🔊"}</button>
       </div></header>`;
   }
@@ -219,7 +229,7 @@
     const name = CHILD_NAME;
     const starter = document.querySelector(".starter-cat.on")?.dataset.id || "mimi";
     const p = ensureState(await api("/api/profiles", { json: { name } }));
-    p.state.cats = [{ id: starter, acc: null }]; p.state.fav = starter;
+    p.state.cats = [{ id: starter, acc: {} }]; p.state.fav = starter;
     S.profile = p;
     await api(`/api/profiles/${p.id}/state`, { json: { state: p.state } });
     store("mk_profile", String(p.id));
@@ -334,8 +344,7 @@
     }
     if (!tasks.length) { toast("Keine Aufgaben gefunden."); return; }
     const sNow = st();
-    let boost = false;
-    if (!mode.trial && sNow.boost > 0) { boost = true; sNow.boost--; saveState(); }
+    const boost = !mode.trial && !mode.test && sNow.boost > 0;
     if (!mode.trial && !mode.test && tasks.length >= 4 && Math.random() < 0.45) {
       const gi = Math.floor(Math.random() * tasks.length); tasks[gi] = Object.assign({}, tasks[gi], { golden: true });
     }
@@ -419,7 +428,7 @@
       if (!ok) addRetry(t, given);
       g.bubble = pick(["Gespeichert ✓", "Weiter geht's!", "Gut – nächste!"]);
       sfx.tap(); render();
-      setTimeout(nextTask, 650);
+      setTimeout(() => nextTask(g), 650);
       return;
     }
     if (isCorrect(t, given)) {
@@ -439,7 +448,7 @@
       record(t, true, first, given);
       render();
       if (earned) floatFish(earned);
-      setTimeout(nextTask, first ? 1150 : 1400);
+      setTimeout(() => nextTask(g), first ? 1150 : 1400);
       return;
     }
     g.tries++; g.shake = true; g.combo = 0; sfx.bad();
@@ -469,7 +478,7 @@
     const g = S.game, s = st();
     g.results[g.idx] = { correct, first_try: first, module: t.module || t.skill };
     if (g.mode.trial) return;
-    if (t.pack) {
+    if (t.pack && !t.fromRetry) {
       const ps = pstat(t.pack), k = sig(t);
       const label = t.type === "clock" ? `Uhr ${t.clock.h}:${String(t.clock.m).padStart(2, "0")}` : t.type === "money" ? `${t.prompt} (${t.answer} ${t.unit || ""})` : (t.expr || t.prompt);
       const ts = ps.tasks[k] || (ps.tasks[k] = { label, r: 0, w: 0 });
@@ -501,9 +510,9 @@
     saveState();
   }
 
-  function nextTask() {
+  function nextTask(expected) {
     const g = S.game;
-    if (!g || S.view !== "game") return;
+    if (!g || S.view !== "game" || (expected && expected !== g)) return;
     g.idx++; g.tries = 0; g.input = ""; g.locked = false; g.feedback = null; g.wrongChoices = []; g.mood = "happy"; g.bubble = null; g.firstWrong = null;
     if (g.idx >= g.tasks.length) return finishGame();
     render();
@@ -536,6 +545,7 @@
         else if (r < 0.5 && played <= rec && played > 1) s.levels[k] = played - 1;
       });
     }
+    if (g.boost) s.boost = Math.max(0, (s.boost || 0) - 1);
     if (g.mode.kind === "pack" && stars === 3) s.packstars++;
     if (g.mode.kind === "pack") {
       const ps = pstat(g.mode.pack.id);
@@ -591,7 +601,7 @@
         <button class="btn big" data-act="packplay" data-id="${r.mode.pack.id}" data-test="0">🎯 Üben</button>
         <button class="btn big" data-act="again">📝 Nochmal testen</button></div>
     </div>`;
-    if (r.unlocked.length) setTimeout(() => revealCat(r.unlocked[0], true), 900);
+    revealPending(r);
   }
 
   function renderResult() {
@@ -612,7 +622,15 @@
       ${st().fish >= BASKET_PRICE && commonLeft() > 0 ? `<button class="btn big pulse" data-act="nav" data-v="shop">🧺 Kätzchen-Körbchen öffnen!</button>` : ""}
       <div class="row"><button class="btn ghost big" data-act="nav" data-v="home">Fertig</button>${r.mode.kind === "retry" && !r.openLeft ? "" : `<button class="btn big" data-act="again">Nochmal 🔁</button>`}</div>
     </div>`;
-    if (r.unlocked.length) setTimeout(() => revealCat(r.unlocked[0], true), 900);
+    revealPending(r);
+  }
+
+  function revealPending(r) {
+    if (!r.unlocked || !r.unlocked.length) return;
+    setTimeout(() => {
+      if (S.result !== r || S.view !== "result" || !$overlay.classList.contains("hidden") || !r.unlocked.length) return;
+      revealCat(r.unlocked.shift(), true);
+    }, 900);
   }
 
   function confetti() {
@@ -636,7 +654,7 @@
     CATS.filter((c) => c.rare && !owned(c.id)).forEach((c) => {
       const u = c.unlock;
       const ok = (u.type === "streak" && s.best_streak >= u.n) || (u.type === "total" && s.total_correct >= u.n) || (u.type === "packstar" && s.packstars >= u.n) || (u.type === "fixed" && s.fixed_total >= u.n);
-      if (ok) { s.cats.push({ id: c.id, acc: null }); out.push(c.id); }
+      if (ok) { s.cats.push({ id: c.id, acc: {} }); out.push(c.id); }
     });
     if (out.length && !returnList) { saveState(); setTimeout(() => revealCat(out[0], true), 600); }
     return out;
@@ -657,6 +675,8 @@
 
   function openCat(id) {
     const s = st(), o = s.cats.find((x) => x.id === id), c = Cats.byId(id);
+    if (!o) return;
+    o.acc = o.acc || {};
     const accs = s.accessories;
     const ownedBySlot = SLOTS.map((sl) => ({ sl, items: ACCESSORIES.filter((a) => a.slot === sl.id && accs.includes(a.id)) })).filter((x) => x.items.length);
     showOverlay(`<div class="cat-detail">
@@ -728,7 +748,7 @@
     const kittens = CATS.filter((c) => !c.rare && !owned(c.id));
     const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
     if (g.kind === "daily") {
-      const streakDay = Math.max(1, s.streak);
+      const streakDay = Math.max(1, curStreak());
       if (streakDay % 7 === 0 && secret.length) return { type: "item", item: pick(secret).id, title: `${streakDay} Tage hintereinander geübt!` };
       return { type: "fish", n: 5 + 2 * Math.min(streakDay, 7), title: streakDay > 1 ? `Tag ${streakDay} in Folge – dein Tagesgeschenk!` : "Dein Tagesgeschenk!" };
     }
@@ -814,7 +834,7 @@
     if (s.fish < BASKET_PRICE || !pool.length) return;
     s.fish -= BASKET_PRICE;
     const c = pick(pool);
-    s.cats.push({ id: c.id, acc: null });
+    s.cats.push({ id: c.id, acc: {} });
     saveState(); render(); revealCat(c.id, false);
   }
 
@@ -1088,8 +1108,15 @@
     document.getElementById("restore").addEventListener("change", async (e) => {
       const f = e.target.files[0]; if (!f) return;
       if (!confirm("Sicherung laden? Die aktuellen Daten auf diesem Gerät werden ersetzt.")) return;
-      try { window.LocalBackup.import(await f.text()); S.profile = null; await loadAdmin(); await refreshBoot(); toast("Sicherung geladen ✅"); renderParent(); }
-      catch (err) { toast(err.message, 5000); }
+      try {
+        clearTimeout(saveTimer); saveTimer = null;
+        window.LocalBackup.import(await f.text());
+        S.profile = null; S.pin = null; S.admin = null;
+        S.boot = await api("/api/bootstrap");
+        const p = S.boot.profiles[0];
+        if (p) { S.profile = ensureState(p); store("mk_profile", String(p.id)); S.view = "home"; } else S.view = "profiles";
+        render(); toast("Sicherung geladen ✅ – Elternbereich bitte mit der PIN aus der Sicherung öffnen.", 5000);
+      } catch (err) { toast(err.message, 5000); }
     });
   }
 
