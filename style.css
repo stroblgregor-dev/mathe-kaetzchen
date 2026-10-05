@@ -384,3 +384,8 @@ h1, h2, h3 { margin: 0; font-weight: 700; }
 .review li span:last-child { font-size: .92rem; color: var(--muted); }
 .review s { color: #be123c; }
 .small-kpis .kpi b { font-size: 1.2rem; }
+
+.sec.center { text-align: center; }
+.profiles .starter { gap: 6px; }
+.profiles .starter-cat { padding: 6px 4px; }
+.profiles .starter-cat .cat-md { width: 86px; height: 92px; }

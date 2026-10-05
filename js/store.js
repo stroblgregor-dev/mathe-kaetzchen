@@ -181,6 +181,11 @@
       if (Array.isArray(json.tasks)) p.tasks = json.tasks.map(KI.validateTask).filter(Boolean);
       save(); return packOut(p);
     }
+    if ((m = path.match(/^\/api\/admin\/profiles\/(\d+)$/)) && method === "POST") {
+      const p = findProfile(+m[1]), name = String(json.name || "").trim().slice(0, 30);
+      if (!name) fail("Name fehlt");
+      p.name = name; save(); return profileOut(p);
+    }
     if ((m = path.match(/^\/api\/admin\/profiles\/(\d+)$/)) && method === "DELETE") {
       const id = +m[1];
       db.profiles = db.profiles.filter((p) => p.id !== id); db.attempts = db.attempts.filter((a) => a.profile_id !== id);

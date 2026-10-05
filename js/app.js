@@ -158,8 +158,8 @@
       return;
     }
     const last = Number(store("mk_profile"));
-    const p = S.boot.profiles.find((x) => x.id === last);
-    if (p) { S.profile = ensureState(p); S.view = "home"; checkUnlocks(); }
+    const p = S.boot.profiles.find((x) => x.id === last) || S.boot.profiles[0];
+    if (p) { S.profile = ensureState(p); store("mk_profile", String(p.id)); S.view = "home"; checkUnlocks(); }
     else S.view = "profiles";
     render();
   }
@@ -186,7 +186,7 @@
   function topbar() {
     const s = st();
     return `<header class="topbar">
-      <button class="who" data-act="profiles">${catSVG(favCat().def, { cls: "cat-xs" })}<span>${esc(S.profile.name)}</span></button>
+      <button class="who" data-act="nav" data-v="cats">${catSVG(favCat().def, { cls: "cat-xs" })}<span>${esc(S.profile.name)}</span></button>
       <div class="pills">
         <span class="pill fish" title="Fischlein">🐟 <b>${s.fish}</b></span>
         <span class="pill streak" title="Tage hintereinander">🔥 <b>${s.streak}</b></span>
@@ -198,33 +198,20 @@
     return `<nav class="bottomnav">${items.map(([v, i, l]) => `<button class="${active === v ? "on" : ""}" data-act="nav" data-v="${v}"><span>${i}</span>${l}</button>`).join("")}</nav>`;
   }
 
-  // ------------------------------------------------------------------ Profile
+  // ------------------------------------------------------------------ Begrüßung (ein Kind: Kalea)
+  const CHILD_NAME = "Kalea";
   function renderProfiles() {
-    const ps = S.boot.profiles;
-    $app.innerHTML = `<div class="screen profiles">
-      <div class="brand">${catSVG(CATS[0], { mood: "joy", cls: "cat-lg bob" })}<h1>Mathe-Kätzchen</h1><p>Rechnen üben &amp; Kätzchen sammeln</p></div>
-      <div class="profile-list">
-        ${ps.map((p) => { ensureState(p); const own = p.state.cats.find((c) => c.id === p.state.fav) || p.state.cats[0];
-          return `<button class="profile-card" data-act="pickprofile" data-id="${p.id}">${catSVG(own ? own.id : "luna", { cls: "cat-sm", acc: own && own.acc })}
-            <span class="pname">${esc(p.name)}</span><span class="pmeta">🐟 ${p.state.fish} · 🐱 ${p.state.cats.length}</span></button>`; }).join("")}
-        <button class="profile-card add" data-act="newprofile"><span class="plus">＋</span><span class="pname">Neues Kind</span></button>
-      </div></div>`;
-  }
-
-  function newProfileDialog() {
     const starters = ["mimi", "luna", "felix"];
-    showOverlay(`<h2>Wie heißt du?</h2>
-      <input id="pname" class="field big" maxlength="20" placeholder="Name" autocomplete="off">
-      <h3>Such dir dein erstes Kätzchen aus:</h3>
+    $app.innerHTML = `<div class="screen profiles">
+      <div class="brand">${catSVG(CATS[0], { mood: "joy", cls: "cat-lg bob" })}<h1>Hallo ${CHILD_NAME}! 👋</h1><p>Willkommen bei Mathe-Kätzchen</p></div>
+      <h2 class="sec center">Such dir dein erstes Kätzchen aus:</h2>
       <div class="starter">${starters.map((id, i) => `<button class="starter-cat ${i === 0 ? "on" : ""}" data-act="starter" data-id="${id}">${catSVG(id, { cls: "cat-md" })}<span>${Cats.byId(id).name}</span></button>`).join("")}</div>
-      <div class="row"><button class="btn ghost" data-act="close">Abbrechen</button><button class="btn big" data-act="createprofile">Los geht's! 🐾</button></div>`);
-    setTimeout(() => document.getElementById("pname")?.focus(), 50);
+      <div class="row"><button class="btn big" data-act="createprofile">Los geht's! 🐾</button></div></div>`;
   }
 
   async function createProfile() {
-    const name = (document.getElementById("pname").value || "").trim();
-    if (!name) { toast("Bitte einen Namen eingeben."); return; }
-    const starter = $overlay.querySelector(".starter-cat.on")?.dataset.id || "mimi";
+    const name = CHILD_NAME;
+    const starter = document.querySelector(".starter-cat.on")?.dataset.id || "mimi";
     const p = ensureState(await api("/api/profiles", { json: { name } }));
     p.state.cats = [{ id: starter, acc: null }]; p.state.fav = starter;
     S.profile = p;
@@ -970,9 +957,12 @@
         <div class="row left"><button class="btn" data-act="savekey">💾 Speichern</button><button class="btn ghost" data-act="testai">🔌 Verbindung testen</button></div></div>
       <div class="card"><h3>🔒 PIN ändern</h3>
         <div class="row left"><input id="s_pin" class="field" inputmode="numeric" maxlength="4" placeholder="neue 4-stellige PIN"><button class="btn" data-act="savepin">Ändern</button></div></div>
-      <div class="card"><h3>👧 Kinderprofile</h3>
-        ${S.admin.profiles.map((p) => `<div class="row left"><span class="grow">${esc(p.name)}</span><button class="btn small ghost" data-act="delprofile" data-id="${p.id}">Löschen</button></div>`).join("")}
-        <p class="small muted">Neue Profile legt man auf dem Startbildschirm an (auf den Namen oben links tippen).</p></div>`;
+      <div class="card"><h3>👧 Kind</h3>
+        ${S.admin.profiles.map((p) => `<label class="lbl">Name<div class="row left"><input id="s_cname" class="field auto" maxlength="20" value="${esc(p.name)}">
+          <button class="btn" data-act="renamechild" data-id="${p.id}">Ändern</button></div></label>
+          <p class="small muted">Alles zurücksetzen löscht Kätzchen, Fischlein und den ganzen Fortschritt.</p>
+          <button class="btn small ghost" data-act="delprofile" data-id="${p.id}">🗑 Alles zurücksetzen</button>`).join("")}
+        </div>`;
     loadQR(location.href.split("#")[0]);
     document.getElementById("restore").addEventListener("change", async (e) => {
       const f = e.target.files[0]; if (!f) return;
@@ -1168,10 +1158,7 @@
       switch (act) {
         case "reload": location.reload(); break;
         case "mute": S.muted = !S.muted; store("mk_muted", S.muted ? "1" : "0"); if (S.muted && "speechSynthesis" in window) speechSynthesis.cancel(); render(); break;
-        case "profiles": S.view = "profiles"; render(); break;
-        case "pickprofile": { const p = S.boot.profiles.find((x) => x.id === Number(d.id)); S.profile = ensureState(p); store("mk_profile", d.id); S.view = "home"; checkUnlocks(); render(); sfx.tap(); break; }
-        case "newprofile": newProfileDialog(); break;
-        case "starter": $overlay.querySelectorAll(".starter-cat").forEach((b) => b.classList.toggle("on", b === el)); sfx.tap(); break;
+        case "starter": document.querySelectorAll(".starter-cat").forEach((b) => b.classList.toggle("on", b === el)); sfx.tap(); break;
         case "createprofile": await createProfile(); break;
         case "close": hideOverlay(); if (S.view === "cats" || S.view === "shop") render(); break;
         case "nav":
@@ -1279,8 +1266,13 @@
           catch (e) { toast(e.message); }
           break;
         }
+        case "renamechild": {
+          const name = (document.getElementById("s_cname").value || "").trim();
+          if (!name) { toast("Bitte einen Namen eingeben."); break; }
+          await api(`/api/admin/profiles/${d.id}`, { json: { name } }); await loadAdmin(); await refreshBoot(); toast("Name geändert ✅"); break;
+        }
         case "delprofile":
-          if (confirm("Profil mit allen Kätzchen und Ergebnissen löschen?")) {
+          if (confirm("Wirklich alles zurücksetzen? Kätzchen, Fischlein und Fortschritt werden gelöscht.")) {
             await api(`/api/admin/profiles/${d.id}`, { method: "DELETE" });
             if (S.profile && S.profile.id === Number(d.id)) S.profile = null;
             S.parentProfile = null; await loadAdmin(); await refreshBoot(); renderParent();

@@ -3,7 +3,7 @@
 Spielerisch Mathe üben für die **2. Klasse Volksschule (Österreich)** – Kätzchen sammeln mit Fischlein 🐟.
 Reine Web-App (PWA) ohne Server: läuft auf GitHub Pages, wird am Handy installiert und funktioniert offline.
 
-- **Kind:** Zahlen bis 100, Plus, Minus, Ergänzen, Geld, Uhr („viertel/halb/dreiviertel“), Zeit & Kalender,
+- **Kind (Kalea):** Zahlen bis 100, Plus, Minus, Ergänzen, Geld, Uhr („viertel/halb/dreiviertel“), Zeit & Kalender,
   Rechengeschichten – je 3 Stufen, Vorlesen, Kätzchen-Sammlung, Laden mit Accessoires.
 - **Eltern (🔒 PIN, Start 1234):** Fortschritt, Lernzettel fotografieren → Claude baut ein Lernpaket,
   KI-Pakete erstellen, Pakete prüfen/freischalten, Einstellungen, Sicherung.
