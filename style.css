@@ -389,3 +389,31 @@ h1, h2, h3 { margin: 0; font-weight: 700; }
 .profiles .starter { gap: 6px; }
 .profiles .starter-cat { padding: 6px 4px; }
 .profiles .starter-cat .cat-md { width: 86px; height: 92px; }
+
+/* ---------- Überraschungen & Laden ---------- */
+.gift-banner { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; margin-top: 14px; padding: 14px 16px; border-radius: var(--radius);
+  background: linear-gradient(120deg, #fef3c7, #fce7f3, #ede9fe); border: 3px solid #f9a8d4; box-shadow: 0 5px 0 #f9a8d4, var(--shadow); animation: pulse 1.6s infinite; }
+.gift-banner b { display: block; font-size: 1.08rem; }
+.gift-banner small { color: var(--muted); }
+.gb-box { font-size: 2.6rem; animation: wobble .6s infinite; display: inline-block; }
+.gift-btn { background: linear-gradient(180deg, #f472b6, #db2777); box-shadow: 0 4px 0 #9d174d; }
+.reveal.gift .reveal-cat { text-align: center; }
+.reveal.gift .reveal-cat .cat-svg { margin: 0 auto; }
+.reveal.open .reveal-cat h2 { display: block; }
+.gift-fish { font-size: 2rem; letter-spacing: 2px; animation: popin .6s ease; max-width: 280px; margin: 10px auto; }
+.gift-big { font-size: 5rem; animation: popin .6s ease; }
+.task-card.golden { border-color: #facc15; background: linear-gradient(160deg, #fffbeb, #fef3c7); box-shadow: 0 0 0 4px rgba(250,204,21,.35), var(--shadow); }
+.golden-badge { display: inline-block; background: #facc15; color: #78350f; font-weight: 700; border-radius: 999px; padding: 4px 12px; margin-bottom: 8px; font-size: .9rem; animation: pulse 1.2s infinite; }
+.pill.boost { background: #dcfce7; color: #166534; font-weight: 700; }
+.shop-tabs { margin-bottom: 10px; }
+.shop-tabs .chip { font-size: .9rem; padding: 6px 10px; }
+.acc-card { text-align: center; }
+.acc-card.has { background: #f0fdf4; }
+.acc-card.rare { background: linear-gradient(160deg, #fff, #fef3c7); border: 2px solid #fcd34d; }
+.acc-card.secret { background: repeating-linear-gradient(45deg, #fdf2f8, #fdf2f8 10px, #fce7f3 10px, #fce7f3 20px); }
+.acc-card .cat-sm { width: 84px; height: 90px; }
+.slot-row { margin: 6px 0; }
+.slot-name { display: block; font-size: .85rem; font-weight: 600; color: var(--muted); }
+.slot-row { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0; }
+.slot-row .slot-name { width: 92px; text-align: right; }
+.slot-row .acc-row { margin: 0; justify-content: flex-start; flex: 1; }

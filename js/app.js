@@ -2,7 +2,8 @@
 (function () {
   "use strict";
 
-  const { CATS, ACCESSORIES, catSVG } = window.Cats;
+  const { CATS, ACCESSORIES, SLOTS, catSVG } = window.Cats;
+  const MILESTONES = [25, 50, 100, 150, 200, 300, 400, 500, 750, 1000];
   const V = window.Visuals;
   const GEN = window.Generators;
   const BASKET_PRICE = 15;
@@ -104,6 +105,11 @@
     s.fish = s.fish ?? 0; s.cats = s.cats || []; s.accessories = s.accessories || []; s.levels = s.levels || {};
     s.retry = s.retry || []; s.streak = s.streak || 0; s.best_streak = s.best_streak || 0; s.total_correct = s.total_correct || 0;
     s.packstars = s.packstars || 0; s.fixed_total = s.fixed_total || 0; s.packStats = s.packStats || {};
+    s.giftQueue = s.giftQueue || []; s.milestones = s.milestones || []; s.rounds = s.rounds || 0; s.boost = s.boost || 0;
+    s.cats.forEach((c) => {
+      if (typeof c.acc === "string") { const a = ACCESSORIES.find((x) => x.id === c.acc); c.acc = a ? { [a.slot]: a.id } : {}; }
+      else if (!c.acc) c.acc = {};
+    });
     return p;
   }
   let saveTimer = null;
@@ -233,6 +239,7 @@
   }
 
   function renderHome() {
+    checkDailyGift();
     const s = st(), set = S.boot.settings, goal = set.daily_goal, done = Math.min(S.profile.today_correct, goal);
     const fc = favCat();
     const mood = S.profile.today_correct === 0 ? "sleep" : (S.profile.today_correct >= goal ? "joy" : "happy");
@@ -248,6 +255,7 @@
         <div class="goal-label"><span>Tagesziel</span><b>${done} / ${goal} 🐾</b></div>
         <div class="goal-bar"><i style="width:${Math.round(done / goal * 100)}%"></i></div>
       </section>
+      ${giftBanner()}
       ${packs.length ? `<h2 class="sec">📚 Von der Schule &amp; neu für dich</h2><div class="packs">${packs.map((p) => `
         <button class="pack-card" data-act="packmenu" data-id="${p.id}"><span class="pe">${esc(p.emoji || "⭐")}</span>
           <span class="pt">${esc(p.title)}</span><span class="tag ${p.source}">${p.source === "lernzettel" ? "Lernzettel" : "KI ✨"}</span>${packStatLine(p.id)}</button>`).join("")}</div>` : ""}
@@ -325,7 +333,13 @@
       tasks = GEN.shuffle(st().retry).slice(0, n).map((t) => Object.assign({}, t, { fromRetry: true }));
     }
     if (!tasks.length) { toast("Keine Aufgaben gefunden."); return; }
-    S.game = { mode, tasks, idx: 0, tries: 0, input: "", results: [], fish: 0, combo: 0, locked: false, wrongChoices: [], feedback: null, mood: "happy", fixed: 0, testLog: [] };
+    const sNow = st();
+    let boost = false;
+    if (!mode.trial && sNow.boost > 0) { boost = true; sNow.boost--; saveState(); }
+    if (!mode.trial && !mode.test && tasks.length >= 4 && Math.random() < 0.45) {
+      const gi = Math.floor(Math.random() * tasks.length); tasks[gi] = Object.assign({}, tasks[gi], { golden: true });
+    }
+    S.game = { boost, mode, tasks, idx: 0, tries: 0, input: "", results: [], fish: 0, combo: 0, locked: false, wrongChoices: [], feedback: null, mood: "happy", fixed: 0, testLog: [] };
     S.view = "game"; render();
     if (S.boot.settings.tts_auto) setTimeout(() => speak(speakable(tasks[0])), 350);
   }
@@ -370,10 +384,11 @@
       ${t.explain ? `<div class="explain">${esc(t.explain)}</div>` : ""}<button class="btn big" data-act="next">Weiter ➜</button></div>` : "";
     $app.innerHTML = `<div class="screen game">
       <header class="game-top"><button class="x" data-act="quit" aria-label="Beenden">✕</button>
-        <div class="paws">${paws}</div>${g.mode.test ? `<span class="pill test">📝 Test</span>` : `<span class="pill fish">🐟 +${g.fish}</span>`}</header>
+        <div class="paws">${paws}</div>${g.mode.test ? `<span class="pill test">📝 Test</span>` : `${g.boost ? `<span class="pill boost">🍀 ×2</span>` : ""}<span class="pill fish">🐟 +${g.fish}</span>`}</header>
       <div class="mascot"><div class="m-cat">${catSVG(fc.def, { mood: g.mood, acc: fc.acc, cls: "cat-sm " + (g.feedback === "ok" ? "jump" : "") })}</div>
         <div class="bubble small">${esc(g.bubble || (g.mode.test ? pick(["Test läuft – lies genau!", "Ganz in Ruhe rechnen.", "Du hast das geübt – los!"]) : t.fromRetry ? pick(["Die war letztes Mal knifflig – jetzt schaffst du's!", "Rechne ganz in Ruhe nach.", "Detektiv-Zeit! 🔍"]) : pick(["Du schaffst das!", "Los geht's!", "Ich glaub an dich!"])))}</div></div>
-      <section class="task-card ${g.feedback === "ok" ? "ok" : ""} ${g.shake ? "shake" : ""}">
+      <section class="task-card ${g.feedback === "ok" ? "ok" : ""} ${g.shake ? "shake" : ""} ${t.golden ? "golden" : ""}">
+        ${t.golden ? `<div class="golden-badge">⭐ Goldene Aufgabe – dreifach Fischlein!</div>` : ""}
         <div class="prompt"><span>${esc(t.prompt)}</span><button class="say" data-act="say" aria-label="Vorlesen">🔊</button></div>
         ${t.fromRetry ? `<div class="lastwrong">🔧 Fehler-Werkstatt${t.lastWrong ? ` · letztes Mal: <s>${esc(t.lastWrong)}</s>` : ""}</div>` : ""}
         ${gameVisual(t)}${exprHTML(t, g)}
@@ -413,9 +428,12 @@
       g.combo = first ? g.combo + 1 : 0;
       let earned = first ? (t.fromRetry ? FIX_FISH : (g.mode.level ? LEVEL_FISH[g.mode.level] : PACK_FISH)) : 0;
       if (first && g.combo > 0 && g.combo % 5 === 0) { earned += 2; }
+      if (first && t.golden) earned *= 3;
+      if (g.boost) earned *= 2;
       g.fish += earned;
       const comboHit = first && g.combo > 0 && g.combo % 5 === 0;
-      g.bubble = first && t.fromRetry ? pick(["Repariert! 🔧", "Fehler ausgebessert! 🎉", "Jetzt sitzt es!"]) + ` +${earned} 🐟`
+      g.bubble = first && t.golden ? `⭐ Goldene Aufgabe geschafft! +${earned} 🐟`
+        : first && t.fromRetry ? pick(["Repariert! 🔧", "Fehler ausgebessert! 🎉", "Jetzt sitzt es!"]) + ` +${earned} 🐟`
         : comboHit ? `${g.combo} richtig hintereinander! +${earned} 🐟` : first ? pick(["Super!", "Richtig! 🎉", "Toll gemacht!", "Spitze!", "Miau, genau!", "Wow, richtig!"]) : "Jetzt stimmt's! Gut gemacht!";
       sfx.ok(); if (earned) setTimeout(sfx.coin, 250);
       record(t, true, first, given);
@@ -476,7 +494,7 @@
   function addRetry(t, given) {
     const s = st();
     if (S.game && S.game.mode.trial) return;
-    const clean = Object.assign({}, t, { lastWrong: given }); delete clean.fromRetry;
+    const clean = Object.assign({}, t, { lastWrong: given }); delete clean.fromRetry; delete clean.golden;
     const old = s.retry.find((r) => sig(r) === sig(clean));
     if (old) old.lastWrong = given; else s.retry.push(clean);
     if (s.retry.length > 40) s.retry.shift();
@@ -525,9 +543,10 @@
       if (!ps.best || firsts / n > ps.best.c / ps.best.n) ps.best = { c: firsts, n };
       ps.history.push({ d: today(), m: "ueben", c: firsts, n }); if (ps.history.length > 30) ps.history.shift();
     }
+    const giftsNew = roundGifts();
     const unlocked = checkUnlocks(true);
     saveState();
-    S.result = { stars, fish: g.fish, bonus, goalBonus, fixAllBonus, fixed: g.fixed, openLeft: s.retry.length, firsts, n, levelMsgs, unlocked, mode: g.mode };
+    S.result = { giftsNew, stars, fish: g.fish, bonus, goalBonus, fixAllBonus, fixed: g.fixed, openLeft: s.retry.length, firsts, n, levelMsgs, unlocked, mode: g.mode };
     S.game = null; S.view = "result"; render();
     sfx.fanfare(); confetti();
   }
@@ -545,9 +564,10 @@
     if (!prev || grade < prev.grade || (grade === prev.grade && c / n > prev.c / prev.n)) ps.bestTest = { c, n, grade };
     ps.history.push({ d: today(), m: "test", c, n, grade }); if (ps.history.length > 30) ps.history.shift();
     if (grade === 1) s.packstars++;
+    const giftsNew = roundGifts();
     const unlocked = checkUnlocks(true);
     saveState();
-    S.result = { test: true, c, n, grade, fish, gradeBonus, goalBonus, improved: !!prev && grade < prev.grade, prevGrade: prev && prev.grade,
+    S.result = { giftsNew, test: true, c, n, grade, fish, gradeBonus, goalBonus, improved: !!prev && grade < prev.grade, prevGrade: prev && prev.grade,
       wrong: g.testLog.filter((x) => !x.ok), unlocked, mode: g.mode, levelMsgs: [] };
     S.game = null; S.view = "result"; render();
     if (grade <= 3) { sfx.fanfare(); confetti(); }
@@ -563,6 +583,7 @@
       ${r.improved ? `<div class="levelup">⬆️ Besser als beim letzten Bestwert (Note ${r.prevGrade})!</div>` : ""}
       ${catSVG(fc.def, { mood: r.grade <= 3 ? "joy" : "happy", acc: fc.acc, cls: "cat-md " + (r.grade <= 3 ? "jump" : "") })}
       <div class="loot"><span>🐟 +${r.fish}</span>${r.gradeBonus ? `<span>📝 Noten-Bonus +${r.gradeBonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}</div>
+      ${giftButton(r)}
       ${r.wrong.length ? `<div class="review"><h3>Das schauen wir uns nochmal an:</h3>
         <ul>${r.wrong.map((x) => `<li><span>${esc(label(x.t))}</span><span>du: <s>${esc(x.given)}</s> · richtig: <b>${esc(x.t.answer)}${x.t.unit && !["clock"].includes(x.t.type) ? " " + esc(x.t.unit) : ""}</b></span></li>`).join("")}</ul>
         <p class="muted small">Diese Aufgaben liegen jetzt auch in der 🔧 Fehler-Werkstatt.</p></div>` : `<p class="big">Alles richtig – perfekt vorbereitet! 🌟</p>`}
@@ -587,6 +608,7 @@
       <div class="loot"><span>🐟 +${r.fish}</span>${r.bonus ? `<span>⭐ Sterne-Bonus +${r.bonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}${r.fixAllBonus ? `<span>🧹 Werkstatt leer +${r.fixAllBonus}</span>` : ""}</div>
       ${r.mode.kind === "retry" && r.openLeft ? `<p class="muted">Noch ${r.openLeft} in der Fehler-Werkstatt.</p>` : ""}
       ${r.levelMsgs.map((m) => `<div class="levelup">⬆️ ${esc(m)}</div>`).join("")}
+      ${giftButton(r)}
       ${st().fish >= BASKET_PRICE && commonLeft() > 0 ? `<button class="btn big pulse" data-act="nav" data-v="shop">🧺 Kätzchen-Körbchen öffnen!</button>` : ""}
       <div class="row"><button class="btn ghost big" data-act="nav" data-v="home">Fertig</button>${r.mode.kind === "retry" && !r.openLeft ? "" : `<button class="btn big" data-act="again">Nochmal 🔁</button>`}</div>
     </div>`;
@@ -636,12 +658,14 @@
   function openCat(id) {
     const s = st(), o = s.cats.find((x) => x.id === id), c = Cats.byId(id);
     const accs = s.accessories;
+    const ownedBySlot = SLOTS.map((sl) => ({ sl, items: ACCESSORIES.filter((a) => a.slot === sl.id && accs.includes(a.id)) })).filter((x) => x.items.length);
     showOverlay(`<div class="cat-detail">
       <button class="pet" data-act="pet" data-id="${id}">${catSVG(c, { acc: o.acc, mood: "happy", cls: "cat-xl" })}</button>
       <h2>${esc(c.name)}${c.rare ? " ⭐" : ""}</h2><p class="muted">Tippe mich an zum Streicheln!</p>
-      ${accs.length ? `<h3>Anziehen</h3><div class="acc-row"><button class="acc ${!o.acc ? "on" : ""}" data-act="wear" data-id="${id}" data-acc="">✖️</button>
-        ${accs.map((a) => `<button class="acc ${o.acc === a ? "on" : ""}" data-act="wear" data-id="${id}" data-acc="${a}">${ACCESSORIES.find((x) => x.id === a).emoji}</button>`).join("")}</div>`
-        : `<p class="muted small">Im Laden gibt es Maschen, Hüte und Kronen zum Anziehen.</p>`}
+      ${ownedBySlot.length ? `<h3>Anziehen</h3>${ownedBySlot.map(({ sl, items }) => `<div class="slot-row"><span class="slot-name">${sl.emoji} ${sl.name}</span>
+        <div class="acc-row"><button class="acc ${!o.acc[sl.id] ? "on" : ""}" data-act="wear" data-id="${id}" data-slot="${sl.id}" data-acc="">✖️</button>
+        ${items.map((a) => `<button class="acc ${o.acc[sl.id] === a.id ? "on" : ""}" data-act="wear" data-id="${id}" data-slot="${sl.id}" data-acc="${a.id}" title="${esc(a.name)}">${a.emoji}</button>`).join("")}</div></div>`).join("")}`
+        : `<p class="muted small">Im Laden gibt es Mäntelchen, Hüte, Brillen und noch viel mehr zum Anziehen.</p>`}
       <div class="row"><button class="btn ghost" data-act="close">Zurück</button>
       ${s.fav === id ? `<span class="badge">💖 Liebling</span>` : `<button class="btn" data-act="setfav" data-id="${id}">💖 Mein Liebling</button>`}</div></div>`);
   }
@@ -670,6 +694,97 @@
     setTimeout(() => { $overlay.querySelector(".reveal")?.classList.add("open"); sfx.fanfare(); confetti(); speak(`${c.name} zieht bei dir ein!`); }, 1100);
   }
 
+  // ------------------------------------------------------------------ Überraschungen 🎁
+  function addGift(kind, extra) { st().giftQueue.push(Object.assign({ kind }, extra || {})); }
+
+  function checkDailyGift() {
+    const s = st();
+    if (!s.cats.length || s.daily_gift === today()) return;
+    s.daily_gift = today(); addGift("daily"); saveState();
+  }
+
+  function roundGifts() {
+    const s = st(), before = s.giftQueue.length;
+    s.rounds++;
+    if (s.rounds % 4 === 0 || Math.random() < 0.2) addGift("round");
+    MILESTONES.forEach((m) => { if (s.total_correct >= m && !s.milestones.includes(m)) { s.milestones.push(m); addGift("milestone", { m }); } });
+    return s.giftQueue.length - before;
+  }
+
+  function giftBanner() {
+    const n = st().giftQueue.length;
+    if (!n) return "";
+    return `<button class="gift-banner" data-act="opengift"><span class="gb-box">🎁</span>
+      <span><b>${n === 1 ? "Eine Überraschung wartet auf dich!" : `${n} Überraschungen warten auf dich!`}</b><small>Tippe zum Öffnen</small></span></button>`;
+  }
+  function giftButton(r) {
+    if (!r.giftsNew) return "";
+    return `<button class="btn big gift-btn pulse" data-act="opengift">🎁 Überraschung gefunden! Öffnen</button>`;
+  }
+
+  function rollGift(g) {
+    const s = st();
+    const secret = ACCESSORIES.filter((a) => a.surprise && !s.accessories.includes(a.id));
+    const kittens = CATS.filter((c) => !c.rare && !owned(c.id));
+    const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+    if (g.kind === "daily") {
+      const streakDay = Math.max(1, s.streak);
+      if (streakDay % 7 === 0 && secret.length) return { type: "item", item: pick(secret).id, title: `${streakDay} Tage hintereinander geübt!` };
+      return { type: "fish", n: 5 + 2 * Math.min(streakDay, 7), title: streakDay > 1 ? `Tag ${streakDay} in Folge – dein Tagesgeschenk!` : "Dein Tagesgeschenk!" };
+    }
+    if (g.kind === "milestone") {
+      if (secret.length && Math.random() < 0.6) return { type: "item", item: pick(secret).id, bonus: 10, title: `${g.m} Aufgaben richtig gelöst!` };
+      if (kittens.length) return { type: "kitten", cat: pick(kittens).id, bonus: 10, title: `${g.m} Aufgaben richtig gelöst!` };
+      return { type: "fish", n: 30, title: `${g.m} Aufgaben richtig gelöst!` };
+    }
+    const pool = [["fish", 45], ["boost", 20], ["bigfish", 8]];
+    if (secret.length) pool.push(["item", 18]);
+    if (kittens.length) pool.push(["kitten", 7]);
+    const total = pool.reduce((a, [, w]) => a + w, 0);
+    let r = Math.random() * total, type = "fish";
+    for (const [k, w] of pool) { if ((r -= w) < 0) { type = k; break; } }
+    if (type === "fish") return { type: "fish", n: rnd(5, 12), title: "Fischlein-Regen!" };
+    if (type === "bigfish") return { type: "fish", n: rnd(18, 25), title: "Riesen-Fischlein-Regen!" };
+    if (type === "boost") return { type: "boost", title: "Glücks-Pfote!" };
+    if (type === "item") return { type: "item", item: pick(secret).id, title: "Ein Geheim-Teil!" };
+    return { type: "kitten", cat: pick(kittens).id, title: "Ein Kätzchen im Geschenk!" };
+  }
+
+  function openGift() {
+    const s = st();
+    const g = s.giftQueue.shift();
+    if (!g) return;
+    if (S.result) S.result.giftsNew = s.giftQueue.length;
+    const rw = rollGift(g);
+    const fc = favCat();
+    let body = "";
+    if (rw.type === "fish") {
+      s.fish += rw.n;
+      body = `<div class="gift-fish">${"🐟".repeat(Math.min(rw.n, 12))}</div><p class="big"><b>+${rw.n} Fischlein!</b></p>`;
+    } else if (rw.type === "boost") {
+      s.boost = (s.boost || 0) + 1;
+      body = `<div class="gift-big">🍀</div><p class="big">Deine <b>nächste Runde</b> bringt <b>doppelte Fischlein</b>!</p>`;
+    } else if (rw.type === "item") {
+      const a = ACCESSORIES.find((x) => x.id === rw.item);
+      s.accessories.push(a.id);
+      const fav = s.cats.find((c) => c.id === s.fav) || s.cats[0];
+      if (fav) { fav.acc = fav.acc || {}; fav.acc[a.slot] = a.id; }
+      body = `${catSVG(fc.def, { acc: fav ? fav.acc : { [a.slot]: a.id }, mood: "joy", cls: "cat-lg jump" })}
+        <p class="big">${a.emoji} <b>${esc(a.name)}</b></p><p class="muted">Das gibt es in keinem Laden – nur für dich!</p>`;
+    } else if (rw.type === "kitten") {
+      s.cats.push({ id: rw.cat, acc: {} });
+      body = `${catSVG(rw.cat, { mood: "joy", cls: "cat-lg jump" })}<p class="big"><b>${esc(Cats.byId(rw.cat).name)}</b> zieht bei dir ein!</p>`;
+    }
+    if (rw.bonus) { s.fish += rw.bonus; body += `<p>+ ${rw.bonus} 🐟 Bonus</p>`; }
+    saveState();
+    const more = s.giftQueue.length;
+    showOverlay(`<div class="reveal gift">
+      <div class="basket">🎁</div>
+      <div class="reveal-cat"><h2>${esc(rw.title)}</h2>${body}</div>
+      <div class="row">${more ? `<button class="btn big" data-act="opengift">🎁 Nächste öffnen (${more})</button>` : `<button class="btn big" data-act="close">Juhu! 🎉</button>`}</div></div>`, "reveal-sheet");
+    setTimeout(() => { $overlay.querySelector(".reveal")?.classList.add("open"); sfx.fanfare(); confetti(); }, 1100);
+  }
+
   // ------------------------------------------------------------------ Laden
   function renderShop() {
     const s = st(), left = commonLeft();
@@ -682,10 +797,13 @@
         ${!left ? `<p class="small">Du hast alle Körbchen-Kätzchen! Die seltenen ⭐ bekommst du durch fleißiges Üben.</p>` :
           s.fish < BASKET_PRICE ? `<p class="small">Noch ${BASKET_PRICE - s.fish} Fischlein – rechne weiter!</p>` : ""}</div>
       </section>
-      <h2 class="sec">🎀 Zum Anziehen</h2>
-      <div class="acc-shop">${ACCESSORIES.map((a) => {
-        const has = s.accessories.includes(a.id);
-        return `<div class="acc-card"><span class="ae">${a.emoji}</span><span>${a.name}</span>
+      ${giftBanner()}
+      <h2 class="sec">🎀 Zum Anziehen <small class="muted">${s.accessories.length} / ${ACCESSORIES.length}</small></h2>
+      <div class="chips shop-tabs">${[{ id: "all", emoji: "✨", name: "Alles" }].concat(SLOTS).map((sl) => `<button class="chip ${(S.shopTab || "all") === sl.id ? "on" : ""}" data-act="shoptab" data-k="${sl.id}">${sl.emoji} ${sl.name}</button>`).join("")}</div>
+      <div class="acc-shop">${ACCESSORIES.filter((a) => (S.shopTab || "all") === "all" || a.slot === S.shopTab).map((a) => {
+        const has = s.accessories.includes(a.id), fc = favCat();
+        if (a.surprise && !has) return `<div class="acc-card secret"><span class="ae">🎁</span><span>Geheim-Teil</span><span class="small muted">nur in Überraschungen</span></div>`;
+        return `<div class="acc-card ${has ? "has" : ""} ${a.surprise ? "rare" : ""}">${catSVG(fc.def, { acc: { [a.slot]: a.id }, cls: "cat-sm" })}<span>${a.emoji} ${a.name}</span>
           ${has ? `<span class="badge">✔ gehört dir</span>` : `<button class="btn small" data-act="buyacc" data-id="${a.id}" ${s.fish < a.price ? "disabled" : ""}>${a.price} 🐟</button>`}</div>`;
       }).join("")}</div></main>${bottomnav("shop")}`;
   }
@@ -704,7 +822,10 @@
     const s = st(), a = ACCESSORIES.find((x) => x.id === id);
     if (!a || s.fish < a.price || s.accessories.includes(id)) return;
     s.fish -= a.price; s.accessories.push(id); sfx.coin();
-    saveState(); render(); toast(`${a.emoji} ${a.name} gekauft! Zieh sie einem Kätzchen an.`);
+    const fav = s.cats.find((c) => c.id === s.fav) || s.cats[0];
+    if (fav) { fav.acc = fav.acc || {}; fav.acc[a.slot] = a.id; }
+    saveState(); render(); confetti();
+    toast(`${a.emoji} ${a.name} gekauft! ${fav ? Cats.byId(fav.id).name + " trägt es schon 😻" : ""}`, 3000);
   }
 
   // ------------------------------------------------------------------ Eltern: PIN
@@ -1160,7 +1281,7 @@
         case "mute": S.muted = !S.muted; store("mk_muted", S.muted ? "1" : "0"); if (S.muted && "speechSynthesis" in window) speechSynthesis.cancel(); render(); break;
         case "starter": document.querySelectorAll(".starter-cat").forEach((b) => b.classList.toggle("on", b === el)); sfx.tap(); break;
         case "createprofile": await createProfile(); break;
-        case "close": hideOverlay(); if (S.view === "cats" || S.view === "shop") render(); break;
+        case "close": hideOverlay(); if (["cats", "shop", "home", "result"].includes(S.view)) render(); break;
         case "nav":
           if (d.v === "parent") { if (S.pin) { S.view = "parent"; await loadAdmin(); render(); } else pinDialog(); break; }
           S.view = d.v; render(); break;
@@ -1188,7 +1309,9 @@
           break;
         case "opencat": openCat(d.id); break;
         case "pet": pet(el); break;
-        case "wear": { const o = st().cats.find((c) => c.id === d.id); o.acc = d.acc || null; saveState(); openCat(d.id); sfx.tap(); break; }
+        case "wear": { const o = st().cats.find((c) => c.id === d.id); o.acc = o.acc || {}; if (d.acc) o.acc[d.slot] = d.acc; else delete o.acc[d.slot]; saveState(); openCat(d.id); sfx.tap(); break; }
+        case "shoptab": S.shopTab = d.k; render(); break;
+        case "opengift": openGift(); break;
         case "setfav": st().fav = d.id; saveState(); openCat(d.id); render(); break;
         case "buybasket": buyBasket(); break;
         case "buyacc": buyAcc(d.id); break;
