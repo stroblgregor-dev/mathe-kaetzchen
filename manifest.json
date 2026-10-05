@@ -1,0 +1,17 @@
+{
+  "name": "Mathe-Kätzchen",
+  "short_name": "Mathe-Kätzchen",
+  "description": "Spielerisch Mathe üben für die 2. Klasse Volksschule – mit Kätzchen zum Sammeln.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff6ea",
+  "theme_color": "#fff6ea",
+  "lang": "de-AT",
+  "icons": [
+    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
