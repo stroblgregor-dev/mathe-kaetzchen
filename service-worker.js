@@ -1,5 +1,5 @@
 /* Offline-fähig: App-Dateien werden gecacht. Bei neuer Version CACHE hochzählen. */
-const CACHE = "mathe-kaetzchen-v3";
+const CACHE = "mathe-kaetzchen-v4";
 const ASSETS = ["./", "./index.html", "./style.css", "./manifest.json",
   "./js/cats.js", "./js/visuals.js", "./js/ai.js", "./js/store.js", "./js/generators.js", "./js/app.js",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"];

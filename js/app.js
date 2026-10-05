@@ -103,7 +103,7 @@
     const s = p.state;
     s.fish = s.fish ?? 0; s.cats = s.cats || []; s.accessories = s.accessories || []; s.levels = s.levels || {};
     s.retry = s.retry || []; s.streak = s.streak || 0; s.best_streak = s.best_streak || 0; s.total_correct = s.total_correct || 0;
-    s.packstars = s.packstars || 0; s.fixed_total = s.fixed_total || 0;
+    s.packstars = s.packstars || 0; s.fixed_total = s.fixed_total || 0; s.packStats = s.packStats || {};
     return p;
   }
   let saveTimer = null;
@@ -262,11 +262,11 @@
         <div class="goal-bar"><i style="width:${Math.round(done / goal * 100)}%"></i></div>
       </section>
       ${packs.length ? `<h2 class="sec">📚 Von der Schule &amp; neu für dich</h2><div class="packs">${packs.map((p) => `
-        <button class="pack-card" data-act="playpack" data-id="${p.id}"><span class="pe">${esc(p.emoji || "⭐")}</span>
-          <span class="pt">${esc(p.title)}</span><span class="tag ${p.source}">${p.source === "lernzettel" ? "Lernzettel" : "KI ✨"}</span></button>`).join("")}</div>` : ""}
+        <button class="pack-card" data-act="packmenu" data-id="${p.id}"><span class="pe">${esc(p.emoji || "⭐")}</span>
+          <span class="pt">${esc(p.title)}</span><span class="tag ${p.source}">${p.source === "lernzettel" ? "Lernzettel" : "KI ✨"}</span>${packStatLine(p.id)}</button>`).join("")}</div>` : ""}
       ${own.length ? `<h2 class="sec">✏️ Meine Übungen</h2><div class="packs">${own.map((p) => `
-        <button class="pack-card own" data-act="playpack" data-id="${p.id}"><span class="pe">${esc(p.emoji || "✏️")}</span>
-          <span class="pt">${esc(p.title)}</span><span class="tag eigen">${p.count} Aufgaben</span></button>`).join("")}</div>` : ""}
+        <button class="pack-card own" data-act="packmenu" data-id="${p.id}"><span class="pe">${esc(p.emoji || "✏️")}</span>
+          <span class="pt">${esc(p.title)}</span><span class="tag eigen">${p.count} Aufgaben</span>${packStatLine(p.id)}</button>`).join("")}</div>` : ""}
       ${werkstattHTML()}
       <h2 class="sec">🎯 Üben</h2>
       <div class="modules">
@@ -274,6 +274,40 @@
         ${mods.map((m) => `<button class="mod-card" style="--c:${m.color}" data-act="pickmod" data-key="${m.key}">
           <span class="me">${m.emoji}</span><span class="mn">${m.name}</span><span class="ml">${"🐾".repeat(moduleLevel(m.key))}<span class="dim">${"🐾".repeat(3 - moduleLevel(m.key))}</span></span></button>`).join("")}
       </div></main>${bottomnav("home")}`;
+  }
+
+  // ------------------------------------------------------------------ Übungen: Statistik, Test-Modus
+  const GRADE_NAMES = { 1: "Sehr gut", 2: "Gut", 3: "Befriedigend", 4: "Genügend", 5: "Noch üben 💪" };
+  const GRADE_BONUS = { 1: 6, 2: 4, 3: 2, 4: 1, 5: 0 };
+  const gradeOf = (c, n) => { const p = n ? c / n : 0; return p >= 0.9 ? 1 : p >= 0.8 ? 2 : p >= 0.65 ? 3 : p >= 0.5 ? 4 : 5; };
+  function pstat(id, state) {
+    const s = state || st(); s.packStats = s.packStats || {};
+    return s.packStats[id] || (s.packStats[id] = { plays: 0, tests: 0, best: null, bestTest: null, history: [], tasks: {} });
+  }
+  function packStatLine(id) {
+    const ps = (st().packStats || {})[id];
+    if (!ps || (!ps.plays && !ps.tests)) return `<span class="pstat muted">noch nicht geübt</span>`;
+    const parts = [];
+    if (ps.plays) parts.push(`${ps.plays}× geübt${ps.best ? ` · Bestwert ${ps.best.c}/${ps.best.n}` : ""}`);
+    if (ps.bestTest) parts.push(`📝 beste Note ${ps.bestTest.grade}`);
+    return `<span class="pstat">${parts.join("<br>")}</span>`;
+  }
+  function packMenu(id) {
+    const p = S.boot.packs.find((x) => x.id === id);
+    if (!p) return;
+    const n = p.source === "eigen" ? p.count : Math.min(p.count, S.boot.settings.session_len || 10);
+    showOverlay(`<h2>${esc(p.emoji || "⭐")} ${esc(p.title)}</h2>
+      <p class="muted">${n} Aufgaben pro Runde</p>
+      ${packStatLine(id).replace('class="pstat', 'class="pstat big-stat')}
+      <div class="levels">
+        <button class="lvl lvl1" data-act="packplay" data-id="${id}" data-test="0"><span class="lv-paws">🎯</span>
+          <span class="lv-txt"><b>Üben</b><small>mit Tipps und zweitem Versuch</small></span>
+          <span class="lv-fish">${PACK_FISH} 🐟<small>pro Aufgabe</small></span></button>
+        <button class="lvl lvl3" data-act="packplay" data-id="${id}" data-test="1"><span class="lv-paws">📝</span>
+          <span class="lv-txt"><b>Test-Modus</b><small>wie bei der Schularbeit: keine Tipps, nur ein Versuch, am Ende gibt's eine Note</small></span>
+          <span class="lv-fish">${PACK_FISH} 🐟<small>+ Noten-Bonus</small></span></button>
+      </div>
+      <button class="btn ghost" data-act="close">Zurück</button>`);
   }
 
   // ------------------------------------------------------------------ Fehler-Werkstatt
@@ -304,7 +338,7 @@
       tasks = GEN.shuffle(st().retry).slice(0, n).map((t) => Object.assign({}, t, { fromRetry: true }));
     }
     if (!tasks.length) { toast("Keine Aufgaben gefunden."); return; }
-    S.game = { mode, tasks, idx: 0, tries: 0, input: "", results: [], fish: 0, combo: 0, locked: false, wrongChoices: [], feedback: null, mood: "happy", fixed: 0 };
+    S.game = { mode, tasks, idx: 0, tries: 0, input: "", results: [], fish: 0, combo: 0, locked: false, wrongChoices: [], feedback: null, mood: "happy", fixed: 0, testLog: [] };
     S.view = "game"; render();
     if (S.boot.settings.tts_auto) setTimeout(() => speak(speakable(tasks[0])), 350);
   }
@@ -332,7 +366,7 @@
   function renderGame() {
     const g = S.game, t = g.tasks[g.idx], total = g.tasks.length;
     const fc = favCat();
-    const paws = g.tasks.map((_, i) => `<i class="${i < g.idx ? (g.results[i] && g.results[i].first_try ? "ok" : "meh") : i === g.idx ? "now" : ""}"></i>`).join("");
+    const paws = g.tasks.map((_, i) => `<i class="${i < g.idx ? (g.mode.test ? "done" : g.results[i] && g.results[i].first_try ? "ok" : "meh") : i === g.idx ? "now" : ""}"></i>`).join("");
     let answer = "";
     if (usesKeypad(t)) {
       answer = `<div class="keypad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<button data-act="key" data-k="${d}">${d}</button>`).join("")}
@@ -349,9 +383,9 @@
       ${t.explain ? `<div class="explain">${esc(t.explain)}</div>` : ""}<button class="btn big" data-act="next">Weiter ➜</button></div>` : "";
     $app.innerHTML = `<div class="screen game">
       <header class="game-top"><button class="x" data-act="quit" aria-label="Beenden">✕</button>
-        <div class="paws">${paws}</div><span class="pill fish">🐟 +${g.fish}</span></header>
+        <div class="paws">${paws}</div>${g.mode.test ? `<span class="pill test">📝 Test</span>` : `<span class="pill fish">🐟 +${g.fish}</span>`}</header>
       <div class="mascot"><div class="m-cat">${catSVG(fc.def, { mood: g.mood, acc: fc.acc, cls: "cat-sm " + (g.feedback === "ok" ? "jump" : "") })}</div>
-        <div class="bubble small">${esc(g.bubble || (t.fromRetry ? pick(["Die war letztes Mal knifflig – jetzt schaffst du's!", "Rechne ganz in Ruhe nach.", "Detektiv-Zeit! 🔍"]) : pick(["Du schaffst das!", "Los geht's!", "Ich glaub an dich!"])))}</div></div>
+        <div class="bubble small">${esc(g.bubble || (g.mode.test ? pick(["Test läuft – lies genau!", "Ganz in Ruhe rechnen.", "Du hast das geübt – los!"]) : t.fromRetry ? pick(["Die war letztes Mal knifflig – jetzt schaffst du's!", "Rechne ganz in Ruhe nach.", "Detektiv-Zeit! 🔍"]) : pick(["Du schaffst das!", "Los geht's!", "Ich glaub an dich!"])))}</div></div>
       <section class="task-card ${g.feedback === "ok" ? "ok" : ""} ${g.shake ? "shake" : ""}">
         <div class="prompt"><span>${esc(t.prompt)}</span><button class="say" data-act="say" aria-label="Vorlesen">🔊</button></div>
         ${t.fromRetry ? `<div class="lastwrong">🔧 Fehler-Werkstatt${t.lastWrong ? ` · letztes Mal: <s>${esc(t.lastWrong)}</s>` : ""}</div>` : ""}
@@ -375,6 +409,17 @@
   function submit(given) {
     const g = S.game, t = g.tasks[g.idx];
     if (g.locked) return;
+    if (g.mode.test) {
+      const ok = isCorrect(t, given);
+      g.locked = true; g.feedback = "saved"; g.mood = "happy";
+      g.testLog.push({ t, given, ok });
+      record(t, ok, ok, given);
+      if (!ok) addRetry(t, given);
+      g.bubble = pick(["Gespeichert ✓", "Weiter geht's!", "Gut – nächste!"]);
+      sfx.tap(); render();
+      setTimeout(nextTask, 650);
+      return;
+    }
     if (isCorrect(t, given)) {
       const first = g.tries === 0;
       g.locked = true; g.feedback = "ok"; g.mood = "joy";
@@ -419,6 +464,12 @@
     const g = S.game, s = st();
     g.results[g.idx] = { correct, first_try: first, module: t.module || t.skill };
     if (g.mode.trial) return;
+    if (t.pack) {
+      const ps = pstat(t.pack), k = sig(t);
+      const label = t.type === "clock" ? `Uhr ${t.clock.h}:${String(t.clock.m).padStart(2, "0")}` : t.type === "money" ? `${t.prompt} (${t.answer} ${t.unit || ""})` : (t.expr || t.prompt);
+      const ts = ps.tasks[k] || (ps.tasks[k] = { label, r: 0, w: 0 });
+      if (first) ts.r++; else ts.w++;
+    }
     if (correct) {
       s.total_correct++;
       S.profile.today_correct++;
@@ -457,6 +508,7 @@
   function finishGame() {
     const g = S.game, s = st();
     if (g.mode.trial) { S.game = null; S.view = "parent"; toast("Probespiel beendet"); askPinAgain(); return; }
+    if (g.mode.test) return finishTest();
     const n = g.results.length, firsts = g.results.filter((r) => r && r.first_try).length;
     const rate = n ? firsts / n : 0;
     const stars = rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : 1;
@@ -480,6 +532,12 @@
       });
     }
     if (g.mode.kind === "pack" && stars === 3) s.packstars++;
+    if (g.mode.kind === "pack") {
+      const ps = pstat(g.mode.pack.id);
+      ps.plays++;
+      if (!ps.best || firsts / n > ps.best.c / ps.best.n) ps.best = { c: firsts, n };
+      ps.history.push({ d: today(), m: "ueben", c: firsts, n }); if (ps.history.length > 30) ps.history.shift();
+    }
     const unlocked = checkUnlocks(true);
     saveState();
     S.result = { stars, fish: g.fish, bonus, goalBonus, fixAllBonus, fixed: g.fixed, openLeft: s.retry.length, firsts, n, levelMsgs, unlocked, mode: g.mode };
@@ -487,7 +545,49 @@
     sfx.fanfare(); confetti();
   }
 
+  function finishTest() {
+    const g = S.game, s = st();
+    const n = g.testLog.length, c = g.testLog.filter((x) => x.ok).length, grade = gradeOf(c, n);
+    const fish = c * PACK_FISH, gradeBonus = GRADE_BONUS[grade];
+    let goalBonus = 0;
+    if (S.profile.today_correct >= S.boot.settings.daily_goal && s.goal_day !== today()) { goalBonus = 5; s.goal_day = today(); }
+    s.fish += fish + gradeBonus + goalBonus;
+    const ps = pstat(g.mode.pack.id);
+    const prev = ps.bestTest;
+    ps.tests++;
+    if (!prev || grade < prev.grade || (grade === prev.grade && c / n > prev.c / prev.n)) ps.bestTest = { c, n, grade };
+    ps.history.push({ d: today(), m: "test", c, n, grade }); if (ps.history.length > 30) ps.history.shift();
+    if (grade === 1) s.packstars++;
+    const unlocked = checkUnlocks(true);
+    saveState();
+    S.result = { test: true, c, n, grade, fish, gradeBonus, goalBonus, improved: !!prev && grade < prev.grade, prevGrade: prev && prev.grade,
+      wrong: g.testLog.filter((x) => !x.ok), unlocked, mode: g.mode, levelMsgs: [] };
+    S.game = null; S.view = "result"; render();
+    if (grade <= 3) { sfx.fanfare(); confetti(); }
+  }
+
+  function renderTestResult() {
+    const r = S.result, fc = favCat();
+    const label = (t) => t.type === "clock" ? `🕒 ${t.clock.h}:${String(t.clock.m).padStart(2, "0")}` : t.type === "money" ? `💶 ${t.prompt}` : (t.expr || t.prompt);
+    $app.innerHTML = `<div class="screen result">
+      <div class="grade g${r.grade}"><small>Note</small><b>${r.grade}</b></div>
+      <h1>${esc(GRADE_NAMES[r.grade])}${r.grade <= 2 ? " 🎉" : ""}</h1>
+      <p class="big"><b>${r.c} von ${r.n} Punkten</b></p>
+      ${r.improved ? `<div class="levelup">⬆️ Besser als beim letzten Bestwert (Note ${r.prevGrade})!</div>` : ""}
+      ${catSVG(fc.def, { mood: r.grade <= 3 ? "joy" : "happy", acc: fc.acc, cls: "cat-md " + (r.grade <= 3 ? "jump" : "") })}
+      <div class="loot"><span>🐟 +${r.fish}</span>${r.gradeBonus ? `<span>📝 Noten-Bonus +${r.gradeBonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}</div>
+      ${r.wrong.length ? `<div class="review"><h3>Das schauen wir uns nochmal an:</h3>
+        <ul>${r.wrong.map((x) => `<li><span>${esc(label(x.t))}</span><span>du: <s>${esc(x.given)}</s> · richtig: <b>${esc(x.t.answer)}${x.t.unit && !["clock"].includes(x.t.type) ? " " + esc(x.t.unit) : ""}</b></span></li>`).join("")}</ul>
+        <p class="muted small">Diese Aufgaben liegen jetzt auch in der 🔧 Fehler-Werkstatt.</p></div>` : `<p class="big">Alles richtig – perfekt vorbereitet! 🌟</p>`}
+      <div class="row wrap"><button class="btn ghost big" data-act="nav" data-v="home">Fertig</button>
+        <button class="btn big" data-act="packplay" data-id="${r.mode.pack.id}" data-test="0">🎯 Üben</button>
+        <button class="btn big" data-act="again">📝 Nochmal testen</button></div>
+    </div>`;
+    if (r.unlocked.length) setTimeout(() => revealCat(r.unlocked[0], true), 900);
+  }
+
   function renderResult() {
+    if (S.result.test) return renderTestResult();
     const r = S.result, fc = favCat();
     const msg = r.mode.kind === "retry" ? (r.fixed ? `${r.fixed} ${r.fixed === 1 ? "Fehler" : "Fehler"} repariert! 🔧` : "Weiter üben – das wird!")
       : r.stars === 3 ? "Fantastisch!" : r.stars === 2 ? "Sehr gut!" : "Gut gemacht – üben macht stark!";
@@ -963,6 +1063,39 @@
     toast("Übung gespeichert – sie ist jetzt beim Kind unter „Meine Übungen“ ✏️", 4000);
   }
 
+  function packSummary(id) {
+    let plays = 0, tests = 0, best = null;
+    S.admin.profiles.forEach((pr) => {
+      const ps = ((pr.state || {}).packStats || {})[id]; if (!ps) return;
+      plays += ps.plays || 0; tests += ps.tests || 0;
+      if (ps.bestTest && (!best || ps.bestTest.grade < best)) best = ps.bestTest.grade;
+    });
+    if (!plays && !tests) return `<span class="muted">noch nicht geübt</span>`;
+    return `🎯 ${plays}× geübt · 📝 ${tests} Test${tests === 1 ? "" : "s"}${best ? ` · beste Note ${best}` : ""}`;
+  }
+
+  function packStatsDialog(id) {
+    const p = S.admin.packs.find((x) => x.id === id);
+    const fmt = (d) => new Date(d).toLocaleDateString("de-AT", { day: "numeric", month: "numeric" });
+    const blocks = S.admin.profiles.map((pr) => {
+      const ps = ((pr.state || {}).packStats || {})[id];
+      if (!ps || (!ps.plays && !ps.tests)) return `<div class="card"><h3>${esc(pr.name)}</h3><p class="muted">Noch nicht geübt.</p></div>`;
+      const weak = Object.values(ps.tasks || {}).filter((t) => t.w > 0).sort((a, b) => b.w - a.w || a.r - b.r);
+      const strong = Object.values(ps.tasks || {}).filter((t) => t.w === 0 && t.r > 0).length;
+      return `<div class="card"><h3>${esc(pr.name)}</h3>
+        <div class="kpis small-kpis"><div class="kpi"><b>${ps.plays || 0}×</b><span>geübt${ps.best ? ` · Bestwert ${ps.best.c}/${ps.best.n}` : ""}</span></div>
+          <div class="kpi"><b>${ps.tests || 0}</b><span>Tests${ps.bestTest ? ` · beste Note ${ps.bestTest.grade} (${ps.bestTest.c}/${ps.bestTest.n})` : ""}</span></div></div>
+        <h4>Verlauf</h4>
+        <ul class="mistakes">${ps.history.slice(-10).reverse().map((h) => `<li><span>${fmt(h.d)} · ${h.m === "test" ? "📝 Test" : "🎯 Üben"} · <b>${h.c}/${h.n}</b>${h.grade ? ` · Note ${h.grade}` : ""}</span></li>`).join("")}</ul>
+        <h4>Noch unsicher</h4>
+        ${weak.length ? `<ul class="mistakes">${weak.map((t) => `<li><span>${esc(t.label)}</span><span class="muted small">✗ ${t.w}× falsch · ✓ ${t.r}× gleich richtig</span></li>`).join("")}</ul>`
+          : `<p class="muted">Keine – alles sitzt! 🎉</p>`}
+        ${strong ? `<p class="small muted">${strong} Aufgabe${strong === 1 ? "" : "n"} immer gleich richtig gelöst.</p>` : ""}</div>`;
+    }).join("");
+    showOverlay(`<h2>📊 ${esc(p ? p.emoji + " " + p.title : "Übung")}</h2>${blocks || "<p>Kein Kinderprofil.</p>"}
+      <div class="row"><button class="btn ghost" data-act="close">Schließen</button></div>`, "wide");
+  }
+
   function pBuilder() {
     const b = S.builder;
     if (!b) {
@@ -972,9 +1105,11 @@
           <button class="btn big" data-act="bnew">＋ Neue Übung</button></div>
         ${own.length ? `<div class="pack-list">${own.map((p) => `<div class="pack-row">
           <span class="pe">${esc(p.emoji)}</span>
-          <div class="pinfo"><b>${esc(p.title)}</b><span class="muted small">${p.count} Aufgaben · ${new Date(p.created).toLocaleDateString("de-AT")}</span></div>
+          <div class="pinfo"><b>${esc(p.title)}</b><span class="muted small">${p.count} Aufgaben · ${new Date(p.created).toLocaleDateString("de-AT")}</span>
+            <span class="small">${packSummary(p.id)}</span></div>
           <label class="switch" title="Beim Kind sichtbar"><input type="checkbox" data-act="packactive" data-id="${p.id}" ${p.active ? "checked" : ""}><i></i></label>
           <div class="row-actions"><button class="btn small ghost" data-act="bedit" data-id="${p.id}">✏️</button>
+          <button class="btn small ghost" data-act="bstats" data-id="${p.id}" title="Fortschritt">📊</button>
           <button class="btn small ghost" data-act="btry" data-id="${p.id}" title="Probe spielen">▶️</button>
           <button class="btn small ghost" data-act="bdelete" data-id="${p.id}" title="Löschen">🗑</button></div></div>`).join("")}</div>`
           : `<p class="muted">Noch keine eigenen Übungen gespeichert.</p>`}`;
@@ -1047,7 +1182,8 @@
         case "pickmix": levelPicker("mix"); break;
         case "startlevel": hideOverlay(); startGame(d.kind === "mix" ? { kind: "mix", level: Number(d.lv) } : { kind: "module", key: d.key, level: Number(d.lv) }); break;
         case "playretry": startGame({ kind: "retry" }); break;
-        case "playpack": startGame({ kind: "pack", pack: S.boot.packs.find((p) => p.id === Number(d.id)) }); break;
+        case "packmenu": packMenu(Number(d.id)); break;
+        case "packplay": { hideOverlay(); const p = S.boot.packs.find((x) => x.id === Number(d.id)); if (p) startGame({ kind: "pack", pack: p, test: d.test === "1" }); break; }
         case "again": startGame(S.result.mode); break;
         case "say": { const t = S.game.tasks[S.game.idx]; speak(speakable(t) + (S.game.feedback === "hint" && t.hint ? ". Tipp: " + t.hint : "")); break; }
         case "key": {
@@ -1102,6 +1238,7 @@
         case "baddmoney": addMoney(); break;
         case "brm": syncBuilder(); S.builder.tasks.splice(Number(d.i), 1); pBuilder(); break;
         case "bsave": await saveBuilder(); break;
+        case "bstats": await loadAdmin(); packStatsDialog(Number(d.id)); break;
         case "bdelete":
           if (confirm("Diese Übung löschen?")) { await api(`/api/admin/packs/${d.id}`, { method: "DELETE" }); await loadAdmin(); await refreshBoot(); pBuilder(); }
           break;
