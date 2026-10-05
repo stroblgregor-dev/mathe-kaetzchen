@@ -115,7 +115,7 @@
   const MIX = {
     1: [["ZE_ZE", 5], ["ZE_E", 2], ["ZE_Z", 2], ["Z_Z", 1]],
     2: [["ZE_ZE", 4], ["ZE_E_ZU", 3], ["ZE_ZE_ZU", 2], ["ZE_Z", 1]],
-    3: [["ZE_ZE_ZU", 6], ["ZE_E_ZU", 2], ["ZE_ZE", 2]],
+    3: [["ZE_ZE_ZU", 8], ["ZE_E_ZU", 2]],
   };
   function weighted(list) {
     const total = list.reduce((a, [, w]) => a + w, 0);
@@ -253,21 +253,27 @@
   }
   const digital = (h, m) => `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")}`;
 
+  /** Uhr-Aufgabe für eine feste Uhrzeit (auch für den Baukasten). */
+  function clockTask(h, m, useDigital, onlyHalf) {
+    const fmt = useDigital || ![0, 15, 30, 45].includes(m) ? digital : clockWord;
+    const isDigital = fmt === digital;
+    const ans = fmt(h, m);
+    const set = new Set([ans]);
+    const cands = shuffle([[h, (m + 30) % 60], [h % 12 + 1, m], [(h + 10) % 12 + 1, m], [h, (m + 15) % 60], [h, (m + 45) % 60], [m / 5 || 12, (h % 12) * 5], [h, (m + 5) % 60]]);
+    for (const [ch, cm] of cands) { if (set.size >= 4) break; if (onlyHalf && cm % 30 !== 0) continue; if (!isDigital && cm % 15 !== 0) continue; if (Number.isInteger(cm) && cm < 60) set.add(fmt(ch, cm)); }
+    let hint = "Der kurze Zeiger zeigt die Stunde, der lange die Minuten.";
+    if (!isDigital && m === 30) hint = "Steht der lange Zeiger unten auf der 6, ist es halb. Halb heißt: eine halbe Stunde vor der nächsten Stunde.";
+    if (!isDigital && (m === 15 || m === 45)) hint = "Viertel: langer Zeiger auf 3. Dreiviertel: langer Zeiger auf 9. Wir sagen schon die nächste Stunde!";
+    return task({ type: "clock", skill: "uhr", prompt: "Wie spät ist es?", clock: { h, m }, choices: shuffle([...set]), answer: ans, hint,
+      explain: `Es ist ${ans}${isDigital ? "" : ` (${digital(h, m)})`}.` });
+  }
+
   function genUhr(level) {
     const h = rnd(1, 12);
     const ms = level === 1 ? [0, 30] : level === 2 ? [0, 15, 30, 45] : [5, 10, 20, 25, 35, 40, 50, 55, 15, 45];
     const m = pick(ms);
     const useDigital = level === 3 || (level === 2 && Math.random() < 0.35);
-    const fmt = useDigital ? digital : clockWord;
-    const ans = fmt(h, m);
-    const set = new Set([ans]);
-    const cands = shuffle([[h, (m + 30) % 60], [h % 12 + 1, m], [(h + 10) % 12 + 1, m], [h, (m + 15) % 60], [h, (m + 45) % 60], [m / 5 || 12, (h % 12) * 5]]);
-    for (const [ch, cm] of cands) { if (set.size >= 4) break; if (level === 1 && cm % 30 !== 0) continue; if (Number.isInteger(cm) && cm < 60) set.add(fmt(ch, cm)); }
-    let hint = "Der kurze Zeiger zeigt die Stunde, der lange die Minuten.";
-    if (!useDigital && m === 30) hint = "Steht der lange Zeiger unten auf der 6, ist es halb. Halb heißt: eine halbe Stunde vor der nächsten Stunde.";
-    if (!useDigital && (m === 15 || m === 45)) hint = "Viertel: langer Zeiger auf 3. Dreiviertel: langer Zeiger auf 9. Wir sagen schon die nächste Stunde!";
-    return task({ type: "clock", skill: "uhr", prompt: "Wie spät ist es?", clock: { h, m }, choices: shuffle([...set]), answer: ans, hint,
-      explain: `Es ist ${ans}${useDigital ? "" : ` (${digital(h, m)})`}.` });
+    return clockTask(h, m, useDigital, level === 1);
   }
 
   // ------------------------------------------------------------------ Zeit
@@ -347,6 +353,79 @@
       hint: "Alle Kinder minus die Mädchen.", explain: `${all} - ${g} = ${all - g}` });
   }
 
+
+  // ------------------------------------------------------------------ Baukasten (eigene Übungen der Eltern)
+  function evalSide(x) {
+    x = String(x).replace(/·/g, "*").replace(/:/g, "/").trim();
+    if (!x || !/^[\d\s+\-*/()]+$/.test(x)) return null;
+    try { const v = Function(`"use strict";return (${x})`)(); return Number.isFinite(v) ? v : null; } catch (e) { return null; }
+  }
+
+  /** Eine Zeile wie "38 - 27", "34 + ? = 50", "? - 12 = 30" oder "45 + 23 = 68" in eine Aufgabe verwandeln.
+      Rückgabe: {task} oder {error}. */
+  function parseEquation(line, asChoice) {
+    let x = String(line || "").trim();
+    if (!x) return null;
+    x = x.replace(/[x×*]/g, "·").replace(/÷/g, ":").replace(/[–−]/g, "-").replace(/_+|□|\.{2,}/g, "?");
+    if (/[^\d\s+\-·:=?()]/.test(x)) return { error: "Nur Zahlen und + − · : = ? erlaubt" };
+    let left, right;
+    if (!x.includes("=")) { left = x; right = "?"; }
+    else {
+      const parts = x.split("=");
+      if (parts.length !== 2) return { error: "Nur ein = erlaubt" };
+      [left, right] = parts.map((t) => t.trim());
+      if (!right) right = "?";
+    }
+    if (!x.includes("?") && right !== "?") {
+      const l = evalSide(left), r = evalSide(right);
+      if (l === null || r === null) return { error: "Rechnung nicht lesbar" };
+      if (l !== r) return { error: `Stimmt nicht – richtig wäre ${left.trim()} = ${l}` };
+      right = "?";
+    }
+    const expr = `${left} = ${right}`.replace(/\s*([+\-·:=])\s*/g, " $1 ").replace(/\s+/g, " ").trim();
+    if ((expr.match(/\?/g) || []).length !== 1) return { error: "Genau ein ? (Lücke) verwenden" };
+    const sols = [];
+    for (let v = 0; v <= 1000 && sols.length < 2; v++) {
+      const [l, r] = expr.replace("?", String(v)).split("=").map(evalSide);
+      if (l !== null && r !== null && Math.abs(l - r) < 1e-9) sols.push(v);
+    }
+    if (!sols.length) return { error: "Keine Lösung zwischen 0 und 1000" };
+    if (sols.length > 1) return { error: "Mehrere Lösungen möglich" };
+    const ans = sols[0];
+    const gapLeft = expr.split("=")[0].includes("?");
+    const skill = gapLeft ? "ergaenzen" : /·|:/.test(expr) ? "sonstiges" : expr.includes("-") ? "minus" : "plus";
+    const nums = (expr.match(/\d+/g) || []).map(Number);
+    let explain = expr.replace("?", String(ans));
+    if (!gapLeft && nums.length === 2 && skill === "plus") explain = explainPlus(nums[0], nums[1]);
+    if (!gapLeft && nums.length === 2 && skill === "minus") explain = explainMinus(nums[0], nums[1]);
+    const hint = gapLeft ? "Welche Zahl macht die Rechnung richtig? Probier es mit der Umkehraufgabe."
+      : skill === "minus" ? "Rechne zuerst die Zehner, dann die Einer." : "Rechne zuerst die Zehner, dann die Einer.";
+    return { task: task({ type: asChoice ? "choice" : "input", skill, prompt: gapLeft ? "Welche Zahl fehlt?" : "Rechne!", expr, answer: ans,
+      choices: asChoice ? numChoices(ans, 3, 10, 0, Math.max(100, ans + 20)) : [], hint, explain }) };
+  }
+
+  /** Geld-Aufgabe aus ausgewählten Münzen/Scheinen (Werte in Cent). kind: "total" | "missing". */
+  function moneyTask(coins, kind) {
+    if (!coins.length) return { error: "Bitte Münzen oder Scheine antippen" };
+    const total = coins.reduce((a, b) => a + b, 0);
+    const sorted = coins.slice().sort((a, b) => b - a);
+    if (kind === "missing") {
+      if (total >= 100) return { error: "Für „Wie viel fehlt auf 1 €?“ muss es weniger als 1 € sein" };
+      return { task: task({ type: "money", skill: "geld", prompt: "Wie viel fehlt auf 1 €?", money: coins.slice(), answer: 100 - total, unit: "c",
+        hint: "1 € sind 100 Cent. Zähle zuerst, wie viel da liegt.", explain: `Da liegen ${total} c. ${total} + ${100 - total} = 100 c = 1 €` }) };
+    }
+    const allCents = coins.every((c) => c < 100), allEuro = coins.every((c) => c >= 100);
+    if (allCents && total < 100) {
+      return { task: task({ type: "money", skill: "geld", prompt: "Wie viel Geld ist das?", money: coins.slice(), answer: total, unit: "c",
+        hint: "Beginne mit der größten Münze und zähle dazu.", explain: `${sorted.join(" + ")} = ${total} c` }) };
+    }
+    if ((allEuro || total % 100 === 0) && total / 100 <= 100) {
+      return { task: task({ type: "money", skill: "geld", prompt: "Wie viel Geld ist das?", money: coins.slice(), answer: total / 100, unit: "€",
+        hint: "Zähle zuerst die Scheine, dann die Münzen.", explain: `${sorted.map((c) => c >= 100 ? c / 100 + " €" : c + " c").join(" + ")} = ${total / 100} €` }) };
+    }
+    return { error: "Bitte nur Cent (unter 1 €) oder nur ganze Euro – keine Kommabeträge" };
+  }
+
   const MODULES = [
     { key: "zahlen100", name: "Zahlen bis 100", emoji: "🔢", color: "#a78bfa", gen: genZahlen },
     { key: "plus",      name: "Plus",           emoji: "➕", color: "#34d399", gen: genPlus },
@@ -376,5 +455,5 @@
     return out;
   }
 
-  window.Generators = { MODULES, makeSession, shuffle, clockWord };
+  window.Generators = { MODULES, makeSession, shuffle, clockWord, clockTask, parseEquation, moneyTask };
 })();

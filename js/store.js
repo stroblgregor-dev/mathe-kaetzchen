@@ -162,6 +162,14 @@
       const pack = await KI.packGenerate(skills, level, count, String(json.wish || "").trim(), db.settings.api_key, db.settings.model);
       return storePack(pack, "ki", { skills, level });
     }
+    if (path === "/api/admin/packs" && method === "POST") {
+      const tasks = (json.tasks || []).map(KI.validateTask).filter(Boolean);
+      if (!tasks.length) fail("Keine gültigen Aufgaben.");
+      const out = storePack({ title: String(json.title || "Meine Übung").slice(0, 60), summary: "", emoji: String(json.emoji || "✏️").slice(0, 4), tasks },
+        json.source === "eigen" ? "eigen" : "ki", {});
+      if (json.active) { db.packs.find((p) => p.id === out.id).active = true; save(); out.active = true; }
+      return out;
+    }
     if ((m = path.match(/^\/api\/admin\/packs\/(\d+)$/))) {
       const id = +m[1];
       if (method === "DELETE") { db.packs = db.packs.filter((p) => p.id !== id); save(); return { ok: true }; }
@@ -169,6 +177,7 @@
       if (method === "GET") return packOut(p);
       if ("active" in json) p.active = !!json.active;
       if ("title" in json) p.title = String(json.title).slice(0, 60);
+      if ("emoji" in json) p.emoji = String(json.emoji).slice(0, 4);
       if (Array.isArray(json.tasks)) p.tasks = json.tasks.map(KI.validateTask).filter(Boolean);
       save(); return packOut(p);
     }

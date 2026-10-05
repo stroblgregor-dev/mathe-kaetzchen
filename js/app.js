@@ -116,9 +116,34 @@
     const own = s.cats.find((c) => c.id === s.fav) || s.cats[0];
     return own ? { def: Cats.byId(own.id), acc: own.acc } : { def: CATS[0], acc: null };
   }
-  function moduleLevel(key) {
-    const fixed = (S.boot.settings.levels || {})[key];
-    return fixed || st().levels[key] || 1;
+  function moduleLevel(key) { return st().levels[key] || 1; }   // empfohlenes Level
+  const LEVEL_FISH = { 1: 1, 2: 2, 3: 3 };                        // Fischlein pro richtiger Antwort
+  const PACK_FISH = 2;                                            // Schul-Pakete & eigene Übungen
+  function mixLevel() {
+    const keys = S.boot.settings.modules.length ? S.boot.settings.modules : GEN.MODULES.map((m) => m.key);
+    return Math.round(keys.reduce((a, k) => a + moduleLevel(k), 0) / keys.length) || 1;
+  }
+
+  function levelPicker(kind, key) {
+    const mod = GEN.MODULES.find((m) => m.key === key);
+    const keys = S.boot.settings.modules.length ? S.boot.settings.modules : GEN.MODULES.map((m) => m.key);
+    const rec = kind === "mix" ? mixLevel() : moduleLevel(key);
+    const sample = (lv) => {
+      const m = kind === "mix" ? GEN.MODULES.find((x) => x.key === keys[Math.floor(Math.random() * keys.length)]) : mod;
+      const t = m.gen(lv);
+      if (t.type === "clock") return `🕒 ${t.answer}`;
+      if (t.type === "money") return `💶 ${t.prompt}`;
+      return t.expr ? t.expr.replace(" = ?", "") : t.prompt;
+    };
+    const names = { 1: "leicht", 2: "mittel", 3: "schwer" };
+    showOverlay(`<h2>${kind === "mix" ? "🌈 Bunte Mischung" : `${mod.emoji} ${esc(mod.name)}`}</h2>
+      <p class="muted">Wähle dein Level!</p>
+      <div class="levels">${[1, 2, 3].map((lv) => `<button class="lvl lvl${lv} ${lv === rec ? "rec" : ""}" data-act="startlevel" data-kind="${kind}" data-key="${key || ""}" data-lv="${lv}">
+        <span class="lv-paws">${"🐾".repeat(lv)}</span>
+        <span class="lv-txt"><b>Level ${lv} · ${names[lv]}</b><small>z.B. ${esc(sample(lv))}</small></span>
+        <span class="lv-fish">${LEVEL_FISH[lv]} 🐟<small>pro Aufgabe</small></span>
+        ${lv === rec ? `<span class="lv-rec">⭐ Empfohlen</span>` : ""}</button>`).join("")}</div>
+      <button class="btn ghost" data-act="close">Zurück</button>`);
   }
 
   // ------------------------------------------------------------------ Laden & Start
@@ -224,7 +249,8 @@
     const s = st(), set = S.boot.settings, goal = set.daily_goal, done = Math.min(S.profile.today_correct, goal);
     const fc = favCat();
     const mood = S.profile.today_correct === 0 ? "sleep" : (S.profile.today_correct >= goal ? "joy" : "happy");
-    const packs = S.boot.packs;
+    const packs = S.boot.packs.filter((p) => p.source !== "eigen");
+    const own = S.boot.packs.filter((p) => p.source === "eigen");
     const mods = GEN.MODULES.filter((m) => set.modules.includes(m.key));
     $app.innerHTML = `${topbar()}<main class="screen home">
       <section class="hero">
@@ -238,11 +264,14 @@
       ${packs.length ? `<h2 class="sec">📚 Von der Schule &amp; neu für dich</h2><div class="packs">${packs.map((p) => `
         <button class="pack-card" data-act="playpack" data-id="${p.id}"><span class="pe">${esc(p.emoji || "⭐")}</span>
           <span class="pt">${esc(p.title)}</span><span class="tag ${p.source}">${p.source === "lernzettel" ? "Lernzettel" : "KI ✨"}</span></button>`).join("")}</div>` : ""}
+      ${own.length ? `<h2 class="sec">✏️ Meine Übungen</h2><div class="packs">${own.map((p) => `
+        <button class="pack-card own" data-act="playpack" data-id="${p.id}"><span class="pe">${esc(p.emoji || "✏️")}</span>
+          <span class="pt">${esc(p.title)}</span><span class="tag eigen">${p.count} Aufgaben</span></button>`).join("")}</div>` : ""}
       ${werkstattHTML()}
       <h2 class="sec">🎯 Üben</h2>
       <div class="modules">
-        <button class="mod-card mix" data-act="playmix"><span class="me">🌈</span><span class="mn">Bunte Mischung</span><span class="ml">von allem etwas</span></button>
-        ${mods.map((m) => `<button class="mod-card" style="--c:${m.color}" data-act="playmod" data-key="${m.key}">
+        <button class="mod-card mix" data-act="pickmix"><span class="me">🌈</span><span class="mn">Bunte Mischung</span><span class="ml">von allem etwas</span></button>
+        ${mods.map((m) => `<button class="mod-card" style="--c:${m.color}" data-act="pickmod" data-key="${m.key}">
           <span class="me">${m.emoji}</span><span class="mn">${m.name}</span><span class="ml">${"🐾".repeat(moduleLevel(m.key))}<span class="dim">${"🐾".repeat(3 - moduleLevel(m.key))}</span></span></button>`).join("")}
       </div></main>${bottomnav("home")}`;
   }
@@ -264,14 +293,13 @@
   function startGame(mode) {
     const n = S.boot.settings.session_len || 10;
     let tasks = [];
-    if (mode.kind === "module") tasks = GEN.makeSession([mode.key], moduleLevel(mode.key), n);
+    if (mode.kind === "module") tasks = GEN.makeSession([mode.key], mode.level || moduleLevel(mode.key), n);
     else if (mode.kind === "mix") {
       const keys = S.boot.settings.modules.length ? S.boot.settings.modules : GEN.MODULES.map((m) => m.key);
-      const lv = {}; keys.forEach((k) => (lv[k] = moduleLevel(k)));
-      tasks = GEN.makeSession(keys, 1, n, lv);
+      tasks = GEN.makeSession(keys, mode.level || 1, n);
     } else if (mode.kind === "pack") {
       const p = mode.pack;
-      tasks = GEN.shuffle(p.tasks).slice(0, n).map((t) => Object.assign({}, t, { module: t.skill || "sonstiges", pack: p.id }));
+      tasks = GEN.shuffle(p.tasks).slice(0, p.source === "eigen" ? 200 : n).map((t) => Object.assign({}, t, { module: t.skill || "sonstiges", pack: p.id }));
     } else if (mode.kind === "retry") {
       tasks = GEN.shuffle(st().retry).slice(0, n).map((t) => Object.assign({}, t, { fromRetry: true }));
     }
@@ -351,11 +379,12 @@
       const first = g.tries === 0;
       g.locked = true; g.feedback = "ok"; g.mood = "joy";
       g.combo = first ? g.combo + 1 : 0;
-      let earned = first ? (t.fromRetry ? FIX_FISH : 1) : 0;
+      let earned = first ? (t.fromRetry ? FIX_FISH : (g.mode.level ? LEVEL_FISH[g.mode.level] : PACK_FISH)) : 0;
       if (first && g.combo > 0 && g.combo % 5 === 0) { earned += 2; }
       g.fish += earned;
+      const comboHit = first && g.combo > 0 && g.combo % 5 === 0;
       g.bubble = first && t.fromRetry ? pick(["Repariert! 🔧", "Fehler ausgebessert! 🎉", "Jetzt sitzt es!"]) + ` +${earned} 🐟`
-        : earned > 1 ? `${g.combo} richtig hintereinander! +${earned} 🐟` : first ? pick(["Super!", "Richtig! 🎉", "Toll gemacht!", "Spitze!", "Miau, genau!", "Wow, richtig!"]) : "Jetzt stimmt's! Gut gemacht!";
+        : comboHit ? `${g.combo} richtig hintereinander! +${earned} 🐟` : first ? pick(["Super!", "Richtig! 🎉", "Toll gemacht!", "Spitze!", "Miau, genau!", "Wow, richtig!"]) : "Jetzt stimmt's! Gut gemacht!";
       sfx.ok(); if (earned) setTimeout(sfx.coin, 250);
       record(t, true, first, given);
       render();
@@ -431,7 +460,7 @@
     const n = g.results.length, firsts = g.results.filter((r) => r && r.first_try).length;
     const rate = n ? firsts / n : 0;
     const stars = rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : 1;
-    const bonus = [0, 1, 3, 5][stars];
+    const bonus = [0, 1, 2, 3][stars] * (g.mode.level || (g.mode.kind === "retry" ? 1 : PACK_FISH));
     let goalBonus = 0, fixAllBonus = 0;
     if (g.mode.kind === "retry" && g.fixed > 0 && s.retry.length === 0) fixAllBonus = FIX_ALL_BONUS;
     if (S.profile.today_correct >= S.boot.settings.daily_goal && s.goal_day !== today()) { goalBonus = 5; s.goal_day = today(); }
@@ -441,11 +470,13 @@
     const byMod = {};
     g.results.forEach((r) => { if (!r) return; (byMod[r.module] = byMod[r.module] || []).push(r.first_try ? 1 : 0); });
     if (g.mode.kind === "module" || g.mode.kind === "mix") {
+      const played = g.mode.level || 1;
       Object.entries(byMod).forEach(([k, arr]) => {
-        if (arr.length < 4 || (S.boot.settings.levels || {})[k] || !GEN.MODULES.find((m) => m.key === k)) return;
-        const r = arr.reduce((a, b) => a + b, 0) / arr.length, cur = s.levels[k] || 1;
-        if (r >= 0.9 && cur < 3) { s.levels[k] = cur + 1; levelMsgs.push(`${GEN.MODULES.find((m) => m.key === k).name}: Stufe ${cur + 1}! 🐾`); }
-        else if (r < 0.5 && cur > 1) s.levels[k] = cur - 1;
+        const min = g.mode.kind === "module" ? 4 : 3;
+        if (arr.length < min || !GEN.MODULES.find((m) => m.key === k)) return;
+        const r = arr.reduce((a, b) => a + b, 0) / arr.length, rec = s.levels[k] || 1;
+        if (r >= 0.9 && played >= rec && played < 3) { s.levels[k] = played + 1; levelMsgs.push(`${GEN.MODULES.find((m) => m.key === k).name}: Level ${played} geschafft! Probier mal Level ${played + 1} 🐾`); }
+        else if (r < 0.5 && played <= rec && played > 1) s.levels[k] = played - 1;
       });
     }
     if (g.mode.kind === "pack" && stars === 3) s.packstars++;
@@ -465,6 +496,7 @@
       <h1>${msg}</h1>
       ${catSVG(fc.def, { mood: "joy", acc: fc.acc, cls: "cat-lg jump" })}
       <p class="big">${r.firsts} von ${r.n} gleich richtig</p>
+      ${r.mode.level ? `<p class="muted">Level ${r.mode.level} ${"🐾".repeat(r.mode.level)} · ${LEVEL_FISH[r.mode.level]} 🐟 pro Aufgabe</p>` : ""}
       <div class="loot"><span>🐟 +${r.fish}</span>${r.bonus ? `<span>⭐ Sterne-Bonus +${r.bonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}${r.fixAllBonus ? `<span>🧹 Werkstatt leer +${r.fixAllBonus}</span>` : ""}</div>
       ${r.mode.kind === "retry" && r.openLeft ? `<p class="muted">Noch ${r.openLeft} in der Fehler-Werkstatt.</p>` : ""}
       ${r.levelMsgs.map((m) => `<div class="levelup">⬆️ ${esc(m)}</div>`).join("")}
@@ -619,12 +651,12 @@
 
   // ------------------------------------------------------------------ Eltern: Ansicht
   function renderParent() {
-    const tabs = [["progress", "📈 Fortschritt"], ["sheet", "📷 Lernzettel"], ["ai", "✨ KI-Paket"], ["packs", "📚 Pakete"], ["settings", "⚙️ Einstellungen"]];
+    const tabs = [["progress", "📈 Fortschritt"], ["builder", "🧱 Baukasten"], ["sheet", "📷 Lernzettel"], ["ai", "✨ KI-Paket"], ["packs", "📚 Pakete"], ["settings", "⚙️ Einstellungen"]];
     $app.innerHTML = `<div class="screen parent">
       <header class="p-top"><h1>Elternbereich</h1><button class="btn ghost small" data-act="leaveparent">Zurück zum Kind ➜</button></header>
       <nav class="p-tabs">${tabs.map(([k, l]) => `<button class="${S.parentTab === k ? "on" : ""}" data-act="ptab" data-k="${k}">${l}</button>`).join("")}</nav>
       <main id="pbody" class="p-body"><div class="muted">Lädt…</div></main></div>`;
-    ({ progress: pProgress, sheet: pSheet, ai: pAI, packs: pPacks, settings: pSettings })[S.parentTab]();
+    ({ progress: pProgress, builder: pBuilder, sheet: pSheet, ai: pAI, packs: pPacks, settings: pSettings })[S.parentTab]();
   }
   const pbody = () => document.getElementById("pbody");
 
@@ -763,7 +795,7 @@
   }
 
   function pPacks() {
-    const ps = S.admin.packs;
+    const ps = S.admin.packs.filter((p) => p.source !== "eigen");
     pbody().innerHTML = ps.length ? `<div class="pack-list">${ps.map((p) => `<div class="pack-row">
         <span class="pe">${esc(p.emoji)}</span>
         <div class="pinfo"><b>${esc(p.title)}</b><span class="muted small">${p.source === "lernzettel" ? "aus Lernzettel" : "KI-erstellt"} · ${p.count} Aufgaben · ${new Date(p.created).toLocaleDateString("de-AT")}</span>
@@ -825,10 +857,10 @@
           <label class="lbl">Aufgaben pro Runde<input id="s_len" class="field" type="number" min="5" max="30" value="${s.session_len}"></label>
         </div>
         <label class="check"><input id="s_tts" type="checkbox" ${s.tts_auto ? "checked" : ""}> Aufgaben automatisch vorlesen</label>
-        <h4>Themen &amp; Stufe</h4>
+        <h4>Themen</h4>
         <table class="tbl">${GEN.MODULES.map((m) => `<tr><td><label class="check"><input type="checkbox" class="s_mod" value="${m.key}" ${s.modules.includes(m.key) ? "checked" : ""}> ${m.emoji} ${m.name}</label></td>
-          <td><select class="field s_lv" data-k="${m.key}"><option value="">automatisch</option>${[1, 2, 3].map((v) => `<option value="${v}" ${String(lv[m.key]) === String(v) ? "selected" : ""}>Stufe ${v}</option>`).join("")}</select></td></tr>`).join("")}</table>
-        <p class="small muted">Automatisch: nach einer Runde mit ≥ 90 % steigt die Stufe, unter 50 % sinkt sie.</p>
+          </tr>`).join("")}</table>
+        <p class="small muted">Das Level (1–3) wählt das Kind bei jeder Runde selbst: Level 1 = 1 🐟, Level 2 = 2 🐟, Level 3 = 3 🐟 pro richtiger Antwort. Nach einer Runde mit ≥ 90 % wird das nächste Level empfohlen.</p>
         <button class="btn" data-act="savesettings">💾 Speichern</button></div>
       <div class="card"><h3>✨ KI (Claude)</h3>
         <p>API-Key: <b>${S.admin.api_key_set ? "hinterlegt ✅" : "fehlt ❌"}</b> <span class="muted small">(Quelle: ${esc(S.admin.api_key_source)})</span></p>
@@ -865,6 +897,133 @@
     } catch (e) { toast(e.message); }
   }
 
+  // ------------------------------------------------------------------ Eltern: Baukasten
+  const B_EMOJIS = ["✏️", "🐱", "🧮", "⭐", "🍎", "🎈", "🚀", "🌈", "🕒", "💶", "🦄", "⚽"];
+  const COIN_VALUES = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+  function newBuilder() { return { id: null, name: "", emoji: "✏️", tasks: [], coins: [], lines: "", errors: [], calcMode: "input", h: 3, m: 0, clockFmt: "words", moneyKind: "total" }; }
+
+  function syncBuilder() {
+    const b = S.builder; if (!b) return;
+    const v = (id) => document.getElementById(id);
+    if (v("b_name")) b.name = v("b_name").value;
+    if (v("b_lines")) b.lines = v("b_lines").value;
+    if (v("b_mode")) b.calcMode = v("b_mode").value;
+    if (v("b_h")) b.h = Number(v("b_h").value);
+    if (v("b_m")) b.m = Number(v("b_m").value);
+    if (v("b_fmt")) b.clockFmt = v("b_fmt").value;
+    if (v("b_mkind")) b.moneyKind = v("b_mkind").value;
+  }
+
+  async function editBuilder(id) {
+    const p = await api(`/api/admin/packs/${id}`);
+    S.builder = Object.assign(newBuilder(), { id: p.id, name: p.title, emoji: p.emoji || "✏️", tasks: p.tasks });
+    pBuilder();
+  }
+
+  function addCalcs() {
+    syncBuilder();
+    const b = S.builder, bad = [], keep = [];
+    let added = 0;
+    b.lines.split(/\n|;/).forEach((line) => {
+      const r = GEN.parseEquation(line, b.calcMode === "choice");
+      if (!r) return;
+      if (r.error) { bad.push(`${line.trim()} → ${r.error}`); keep.push(line.trim()); return; }
+      b.tasks.push(r.task); added++;
+    });
+    b.lines = keep.join("\n"); b.errors = bad;
+    pBuilder();
+    if (added) toast(`${added} Rechnung${added > 1 ? "en" : ""} hinzugefügt ✅`);
+  }
+
+  function addClock() {
+    syncBuilder();
+    const b = S.builder;
+    b.tasks.push(GEN.clockTask(b.h, b.m, b.clockFmt === "digital", false));
+    pBuilder(); toast("Uhr-Aufgabe hinzugefügt ✅");
+  }
+
+  function addMoney() {
+    syncBuilder();
+    const b = S.builder, r = GEN.moneyTask(b.coins, b.moneyKind);
+    if (r.error) { toast(r.error, 4000); return; }
+    b.tasks.push(r.task); b.coins = [];
+    pBuilder(); toast("Geld-Aufgabe hinzugefügt ✅");
+  }
+
+  async function saveBuilder() {
+    syncBuilder();
+    const b = S.builder;
+    if (!b.name.trim()) { toast("Bitte einen Namen für die Übung eingeben."); document.getElementById("b_name")?.focus(); return; }
+    if (!b.tasks.length) { toast("Bitte mindestens eine Aufgabe hinzufügen."); return; }
+    if (b.lines.trim()) { toast("Unten stehen noch Rechnungen – erst „Hinzufügen“ tippen oder löschen."); return; }
+    const body = { title: b.name.trim(), emoji: b.emoji, tasks: b.tasks };
+    if (b.id) await api(`/api/admin/packs/${b.id}`, { json: body });
+    else await api("/api/admin/packs", { json: Object.assign(body, { source: "eigen", active: true }) });
+    S.builder = null; await loadAdmin(); await refreshBoot(); pBuilder();
+    toast("Übung gespeichert – sie ist jetzt beim Kind unter „Meine Übungen“ ✏️", 4000);
+  }
+
+  function pBuilder() {
+    const b = S.builder;
+    if (!b) {
+      const own = S.admin.packs.filter((p) => p.source === "eigen");
+      pbody().innerHTML = `<div class="card"><h3>🧱 Baukasten – eigene Übungen</h3>
+          <p class="muted">Stell eigene Übungen aus Rechnungen, Uhr- und Geld-Aufgaben zusammen. Gespeicherte Übungen erscheinen beim Kind unter <b>„✏️ Meine Übungen“</b>.</p>
+          <button class="btn big" data-act="bnew">＋ Neue Übung</button></div>
+        ${own.length ? `<div class="pack-list">${own.map((p) => `<div class="pack-row">
+          <span class="pe">${esc(p.emoji)}</span>
+          <div class="pinfo"><b>${esc(p.title)}</b><span class="muted small">${p.count} Aufgaben · ${new Date(p.created).toLocaleDateString("de-AT")}</span></div>
+          <label class="switch" title="Beim Kind sichtbar"><input type="checkbox" data-act="packactive" data-id="${p.id}" ${p.active ? "checked" : ""}><i></i></label>
+          <div class="row-actions"><button class="btn small ghost" data-act="bedit" data-id="${p.id}">✏️</button>
+          <button class="btn small ghost" data-act="btry" data-id="${p.id}" title="Probe spielen">▶️</button>
+          <button class="btn small ghost" data-act="bdelete" data-id="${p.id}" title="Löschen">🗑</button></div></div>`).join("")}</div>`
+          : `<p class="muted">Noch keine eigenen Übungen gespeichert.</p>`}`;
+      return;
+    }
+    const mins = Array.from({ length: 12 }, (_, i) => i * 5);
+    pbody().innerHTML = `
+      <div class="card"><h3>${b.id ? "Übung bearbeiten" : "Neue Übung"}</h3>
+        <label class="lbl">Name der Übung<input id="b_name" class="field" maxlength="40" placeholder="z.B. Minus-Training Woche 3" value="${esc(b.name)}"></label>
+        <div class="chips">${B_EMOJIS.map((e) => `<button class="chip ${b.emoji === e ? "on" : ""}" data-act="bemoji" data-e="${e}">${e}</button>`).join("")}</div></div>
+
+      <div class="card"><h3>🧮 Rechnungen</h3>
+        <p class="small muted">Eine Rechnung pro Zeile. Die Lösung rechnet die App selbst aus. Lücke mit <b>?</b> markieren, sonst wird das Ergebnis gefragt.<br>
+        Beispiele: <code>38 - 27</code> · <code>34 + ? = 50</code> · <code>? - 12 = 30</code> · <code>45 + 23 = 68</code></p>
+        <textarea id="b_lines" class="field mono" rows="5" placeholder="38 - 27&#10;56 + 35&#10;34 + ? = 50">${esc(b.lines)}</textarea>
+        ${b.errors.length ? `<div class="note warn small">${b.errors.map(esc).join("<br>")}</div>` : ""}
+        <div class="row left"><select id="b_mode" class="field auto"><option value="input" ${b.calcMode === "input" ? "selected" : ""}>Antwort eintippen</option>
+          <option value="choice" ${b.calcMode === "choice" ? "selected" : ""}>Antwort auswählen (3 Knöpfe)</option></select>
+          <button class="btn" data-act="baddcalc">＋ Hinzufügen</button></div></div>
+
+      <div class="card"><h3>🕒 Uhr</h3>
+        <div class="clock-builder"><div id="b_clock" class="mini-clock">${V.clockSVG(b.h, b.m)}</div>
+          <div class="cb-fields">
+            <label class="lbl">Stunde<select id="b_h" class="field">${Array.from({ length: 12 }, (_, i) => i + 1).map((h) => `<option ${h === b.h ? "selected" : ""}>${h}</option>`).join("")}</select></label>
+            <label class="lbl">Minuten<select id="b_m" class="field">${mins.map((m) => `<option value="${m}" ${m === b.m ? "selected" : ""}>${String(m).padStart(2, "0")}</option>`).join("")}</select></label>
+            <label class="lbl">Antworten als<select id="b_fmt" class="field"><option value="words" ${b.clockFmt === "words" ? "selected" : ""}>Worte (viertel 3, halb 3 …)</option>
+              <option value="digital" ${b.clockFmt === "digital" ? "selected" : ""}>Digital (2:15)</option></select></label>
+          </div></div>
+        <p class="small muted">Worte gehen bei vollen, Viertel- und halben Stunden; sonst wird digital gefragt.</p>
+        <button class="btn" data-act="baddclock">＋ Uhr-Aufgabe hinzufügen</button></div>
+
+      <div class="card"><h3>💶 Geld</h3>
+        <p class="small muted">Münzen und Scheine antippen – Antippen in der Ablage entfernt sie wieder.</p>
+        <div class="coin-palette">${COIN_VALUES.map((v) => `<button class="coin-btn" data-act="bcoin" data-v="${v}">${V.coinSVG(v)}</button>`).join("")}</div>
+        <div class="coin-tray">${b.coins.length ? b.coins.map((v, i) => `<button class="coin-btn" data-act="bcoinrm" data-i="${i}">${V.coinSVG(v)}</button>`).join("")
+          : `<span class="muted small">Noch leer</span>`}</div>
+        ${b.coins.length ? `<p class="small">Summe: <b>${(() => { const t = b.coins.reduce((a, c) => a + c, 0); return t >= 100 ? (t / 100).toLocaleString("de-AT") + " €" : t + " c"; })()}</b></p>` : ""}
+        <div class="row left"><select id="b_mkind" class="field auto"><option value="total" ${b.moneyKind === "total" ? "selected" : ""}>Wie viel Geld ist das?</option>
+          <option value="missing" ${b.moneyKind === "missing" ? "selected" : ""}>Wie viel fehlt auf 1 €?</option></select>
+          <button class="btn" data-act="baddmoney">＋ Geld-Aufgabe hinzufügen</button></div></div>
+
+      <div class="card"><h3>📋 Aufgaben in dieser Übung (${b.tasks.length})</h3>
+        ${b.tasks.length ? `<ol class="task-list">${b.tasks.map((t, i) => taskPreview(t, i).replace('data-act="rmtask"', 'data-act="brm"')).join("")}</ol>` : `<p class="muted">Noch keine Aufgaben.</p>`}
+        <div class="row left"><button class="btn ghost" data-act="bcancel">Abbrechen</button><button class="btn big" data-act="bsave">💾 Übung speichern</button></div></div>`;
+    ["b_h", "b_m"].forEach((id) => document.getElementById(id).addEventListener("change", () => {
+      syncBuilder(); document.getElementById("b_clock").innerHTML = V.clockSVG(S.builder.h, S.builder.m);
+    }));
+  }
+
   // ------------------------------------------------------------------ Klicks
   document.addEventListener("click", async (ev) => {
     const el = ev.target.closest("[data-act]");
@@ -884,8 +1043,9 @@
           if (d.v === "parent") { if (S.pin) { S.view = "parent"; await loadAdmin(); render(); } else pinDialog(); break; }
           S.view = d.v; render(); break;
         case "petfav": { sfx.purr(); const fc = favCat(); el.innerHTML = catSVG(fc.def, { mood: "joy", acc: fc.acc, cls: "cat-lg jump" }); setTimeout(() => S.view === "home" && render(), 1200); break; }
-        case "playmod": startGame({ kind: "module", key: d.key }); break;
-        case "playmix": startGame({ kind: "mix" }); break;
+        case "pickmod": levelPicker("module", d.key); break;
+        case "pickmix": levelPicker("mix"); break;
+        case "startlevel": hideOverlay(); startGame(d.kind === "mix" ? { kind: "mix", level: Number(d.lv) } : { kind: "module", key: d.key, level: Number(d.lv) }); break;
         case "playretry": startGame({ kind: "retry" }); break;
         case "playpack": startGame({ kind: "pack", pack: S.boot.packs.find((p) => p.id === Number(d.id)) }); break;
         case "again": startGame(S.result.mode); break;
@@ -929,6 +1089,27 @@
           if (!S.profile) { toast("Bitte zuerst ein Kinderprofil anlegen."); break; }
           hideOverlay(); S.view = "home";
           startGame({ kind: "pack", pack: S.openPack, trial: true }); break;
+        }
+        // Baukasten
+        case "bnew": S.builder = newBuilder(); pBuilder(); break;
+        case "bedit": await editBuilder(Number(d.id)); break;
+        case "bcancel": S.builder = null; pBuilder(); break;
+        case "bemoji": syncBuilder(); S.builder.emoji = d.e; pBuilder(); break;
+        case "baddcalc": addCalcs(); break;
+        case "baddclock": addClock(); break;
+        case "bcoin": syncBuilder(); S.builder.coins.push(Number(d.v)); sfx.coin(); pBuilder(); break;
+        case "bcoinrm": syncBuilder(); S.builder.coins.splice(Number(d.i), 1); pBuilder(); break;
+        case "baddmoney": addMoney(); break;
+        case "brm": syncBuilder(); S.builder.tasks.splice(Number(d.i), 1); pBuilder(); break;
+        case "bsave": await saveBuilder(); break;
+        case "bdelete":
+          if (confirm("Diese Übung löschen?")) { await api(`/api/admin/packs/${d.id}`, { method: "DELETE" }); await loadAdmin(); await refreshBoot(); pBuilder(); }
+          break;
+        case "btry": {
+          if (!S.profile) { toast("Bitte zuerst ein Kinderprofil anlegen."); break; }
+          const p = S.admin.packs.find((x) => x.id === Number(d.id));
+          const full = await api(`/api/admin/packs/${d.id}`);
+          S.view = "home"; startGame({ kind: "pack", pack: Object.assign({}, p, full), trial: true }); break;
         }
         case "savesettings": {
           const modules = [...document.querySelectorAll(".s_mod:checked")].map((x) => x.value);
