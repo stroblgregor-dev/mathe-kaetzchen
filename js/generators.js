@@ -91,19 +91,50 @@
       hint: "Zehner sind 10, 20, 30, …", explain: `${lo} < ${n} < ${lo + 10}` });
   }
 
+  // ------------------------------------------------------------------ Zahlenpaare für Plus/Minus
+  // Z = glatte Zehner, ZE = Zehner+Einer, E = Einer; "ZÜ" = Zehnerübergang
+  const PAIRS = {
+    plus: {
+      ZE_ZE: () => { const at = rnd(1, 7), ao = rnd(1, 8); return [at * 10 + ao, rnd(1, 8 - at) * 10 + rnd(1, 9 - ao)]; },          // 34 + 25
+      ZE_E: () => { const a = rnd(1, 8) * 10 + rnd(1, 7); return [a, rnd(1, 9 - (a % 10))]; },                                      // 32 + 5
+      Z_Z: () => { const a = rnd(1, 7) * 10; return [a, rnd(1, 9 - a / 10) * 10]; },                                                 // 30 + 40
+      ZE_Z: () => { const a = rnd(1, 7) * 10 + rnd(1, 9); return [a, rnd(1, 8 - Math.floor(a / 10)) * 10]; },                      // 34 + 20
+      ZE_E_ZU: () => { const a = rnd(1, 8) * 10 + rnd(3, 9); return [a, rnd(10 - (a % 10), 9)]; },                                  // 38 + 5
+      ZE_ZE_ZU: () => { const at = rnd(1, 6), ao = rnd(2, 9); return [at * 10 + ao, rnd(1, 8 - at) * 10 + rnd(10 - ao, 9)]; },    // 38 + 45
+    },
+    minus: {
+      ZE_ZE: () => { const at = rnd(2, 9), ao = rnd(1, 9); return [at * 10 + ao, rnd(1, at - 1) * 10 + rnd(0, ao)]; },            // 38 - 27
+      ZE_E: () => { const a = rnd(1, 9) * 10 + rnd(2, 9); return [a, rnd(1, a % 10)]; },                                            // 37 - 4
+      Z_Z: () => { const a = rnd(3, 10) * 10; return [a, rnd(1, a / 10 - 1) * 10]; },                                                // 70 - 30
+      ZE_Z: () => { const a = rnd(2, 9) * 10 + rnd(1, 9); return [a, rnd(1, Math.floor(a / 10) - 1) * 10]; },                     // 56 - 30
+      ZE_E_ZU: () => { const a = rnd(2, 9) * 10 + rnd(0, 7); return [a, rnd((a % 10) + 1, 9)]; },                                  // 43 - 7
+      ZE_ZE_ZU: () => { const at = rnd(3, 9), ao = rnd(0, 8); return [at * 10 + ao, rnd(1, at - 2) * 10 + rnd(ao + 1, 9)]; },     // 52 - 27
+    },
+  };
+  // Mischung je Stufe: schon Stufe 1 enthält zweistellig ± zweistellig (ohne Zehnerübergang)
+  const MIX = {
+    1: [["ZE_ZE", 5], ["ZE_E", 2], ["ZE_Z", 2], ["Z_Z", 1]],
+    2: [["ZE_ZE", 4], ["ZE_E_ZU", 3], ["ZE_ZE_ZU", 2], ["ZE_Z", 1]],
+    3: [["ZE_ZE_ZU", 6], ["ZE_E_ZU", 2], ["ZE_ZE", 2]],
+  };
+  function weighted(list) {
+    const total = list.reduce((a, [, w]) => a + w, 0);
+    let r = Math.random() * total;
+    for (const [k, w] of list) { if ((r -= w) < 0) return k; }
+    return list[0][0];
+  }
+  function pair(op, level) {
+    for (let i = 0; i < 50; i++) {
+      const [a, b] = PAIRS[op][weighted(MIX[level] || MIX[1])]();
+      if (op === "plus" && a + b <= 100 && b >= 1) return [a, b];
+      if (op === "minus" && b >= 1 && b < a) return [a, b];
+    }
+    return op === "plus" ? [34, 25] : [38, 27];
+  }
+
   // ------------------------------------------------------------------ Plus
   function genPlus(level) {
-    let a, b;
-    if (level === 1) {
-      if (Math.random() < 0.5) { a = rnd(1, 8) * 10 + rnd(0, 7); b = rnd(1, 9 - (a % 10)); }
-      else { a = rnd(1, 7) * 10; b = rnd(1, 9 - a / 10) * 10; }
-    } else if (level === 2) {
-      if (Math.random() < 0.5) { a = rnd(1, 6) * 10 + rnd(0, 8); b = rnd(1, 3) * 10 + rnd(0, 9 - (a % 10)); }
-      else { a = rnd(1, 8) * 10 + rnd(3, 9); b = rnd(10 - (a % 10) + 0, 9); if (b < 1) b = 9; }
-    } else {
-      a = rnd(1, 6) * 10 + rnd(2, 9); b = rnd(1, 3) * 10 + rnd(10 - (a % 10), 9);
-    }
-    if (a + b > 100) return genPlus(level);
+    const [a, b] = pair("plus", level);
     const ans = a + b;
     const zu = (a % 10) + (b % 10) >= 10;
     const asChoice = Math.random() < 0.25;
@@ -114,17 +145,7 @@
 
   // ------------------------------------------------------------------ Minus
   function genMinus(level) {
-    let a, b;
-    if (level === 1) {
-      if (Math.random() < 0.5) { a = rnd(2, 9) * 10 + rnd(2, 9); b = rnd(1, a % 10); }
-      else { a = rnd(3, 10) * 10; b = rnd(1, a / 10 - 1) * 10; }
-    } else if (level === 2) {
-      if (Math.random() < 0.5) { a = rnd(3, 9) * 10 + rnd(2, 9); b = rnd(1, 2) * 10 + rnd(1, a % 10); }
-      else { a = rnd(2, 9) * 10 + rnd(0, 7); b = rnd((a % 10) + 1, 9); }
-    } else {
-      a = rnd(4, 9) * 10 + rnd(0, 7); b = rnd(1, 3) * 10 + rnd((a % 10) + 1, 9);
-    }
-    if (b >= a || b < 1) return genMinus(level);
+    const [a, b] = pair("minus", level);
     const ans = a - b;
     const zu = (b % 10) > (a % 10);
     const asChoice = Math.random() < 0.25;
@@ -135,12 +156,17 @@
 
   // ------------------------------------------------------------------ Ergänzen / Platzhalter
   function genErgaenzen(level) {
-    const k = level === 1 ? pick(["ten", "ten", "hundred10"]) : level === 2 ? pick(["ten", "hundred", "front"]) : pick(["hundred", "minusGap", "frontMinus", "front"]);
+    const k = level === 1 ? pick(["ten", "hundred10", "gapEasy", "gapEasy"]) : level === 2 ? pick(["ten", "hundred", "front"]) : pick(["hundred", "minusGap", "frontMinus", "front"]);
     if (k === "ten") {
       const a = rnd(11, 89); if (a % 10 === 0) return genErgaenzen(level);
       const t = Math.ceil(a / 10) * 10;
       return task({ skill: "ergaenzen", prompt: "Ergänze bis zum nächsten Zehner!", expr: `${a} + ? = ${t}`, answer: t - a,
         hint: `Wie viel fehlt von ${a % 10} bis 10?`, explain: `${a} + ${t - a} = ${t}` });
+    }
+    if (k === "gapEasy") {
+      const [a, b] = pair("plus", 1), front = Math.random() < 0.5;
+      return task({ skill: "ergaenzen", prompt: "Welche Zahl fehlt?", expr: front ? `? + ${b} = ${a + b}` : `${a} + ? = ${a + b}`, answer: front ? a : b,
+        hint: "Wie viele Zehner fehlen? Wie viele Einer fehlen?", explain: `${a} + ${b} = ${a + b}` });
     }
     if (k === "hundred10") {
       const a = rnd(1, 9) * 10;
@@ -298,13 +324,13 @@
     const n = pick(NAMES);
     const k = pick(["plus", "minus", "plus", "minus", "compare", "class"]);
     if (k === "plus") {
-      const a = rnd(10, max - 15), b = rnd(3, Math.min(max - a, level === 1 ? 9 : 40));
+      const [a, b] = pair("plus", level);
       const [thing, verb] = pick([["Fischlein", "bekommt"], ["Sticker", "bekommt"], ["Murmeln", "findet"], ["Wollknäuel", "kauft"]]);
       return task({ skill: "sach", prompt: `${n} hat ${a} ${thing}. ${n} ${verb} noch ${b} dazu. Wie viele ${thing} sind es jetzt?`, answer: a + b,
         hint: "Kommt etwas dazu, rechnest du plus.", explain: `${a} + ${b} = ${a + b}` });
     }
     if (k === "minus") {
-      const a = rnd(20, max), b = rnd(3, Math.min(a - 2, level === 1 ? 9 : 40));
+      const [a, b] = pair("minus", level);
       const story = pick([`In der Dose sind ${a} Kekse. ${n} isst ${b} davon.`, `${n} hat ${a} Luftballons und verschenkt ${b} davon.`,
         `Im Korb liegen ${a} Kastanien. ${n} verliert ${b} davon.`, `Im Napf sind ${a} Fischlein. Die Katze frisst ${b} davon.`]);
       return task({ skill: "sach", prompt: `${story} Wie viele sind noch übrig?`, answer: a - b,

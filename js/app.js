@@ -6,6 +6,8 @@
   const V = window.Visuals;
   const GEN = window.Generators;
   const BASKET_PRICE = 15;
+  const FIX_FISH = 3;          // Belohnung pro ausgebessertem Fehler
+  const FIX_ALL_BONUS = 5;     // Bonus, wenn die Werkstatt leer ist
   const $app = document.getElementById("app");
   const $overlay = document.getElementById("overlay");
   const $toast = document.getElementById("toast");
@@ -101,7 +103,7 @@
     const s = p.state;
     s.fish = s.fish ?? 0; s.cats = s.cats || []; s.accessories = s.accessories || []; s.levels = s.levels || {};
     s.retry = s.retry || []; s.streak = s.streak || 0; s.best_streak = s.best_streak || 0; s.total_correct = s.total_correct || 0;
-    s.packstars = s.packstars || 0;
+    s.packstars = s.packstars || 0; s.fixed_total = s.fixed_total || 0;
     return p;
   }
   let saveTimer = null;
@@ -236,13 +238,26 @@
       ${packs.length ? `<h2 class="sec">📚 Von der Schule &amp; neu für dich</h2><div class="packs">${packs.map((p) => `
         <button class="pack-card" data-act="playpack" data-id="${p.id}"><span class="pe">${esc(p.emoji || "⭐")}</span>
           <span class="pt">${esc(p.title)}</span><span class="tag ${p.source}">${p.source === "lernzettel" ? "Lernzettel" : "KI ✨"}</span></button>`).join("")}</div>` : ""}
+      ${werkstattHTML()}
       <h2 class="sec">🎯 Üben</h2>
       <div class="modules">
         <button class="mod-card mix" data-act="playmix"><span class="me">🌈</span><span class="mn">Bunte Mischung</span><span class="ml">von allem etwas</span></button>
-        ${s.retry.length >= 3 ? `<button class="mod-card retry" data-act="playretry"><span class="me">🔁</span><span class="mn">Nochmal üben</span><span class="ml">${s.retry.length} knifflige Aufgaben</span></button>` : ""}
         ${mods.map((m) => `<button class="mod-card" style="--c:${m.color}" data-act="playmod" data-key="${m.key}">
           <span class="me">${m.emoji}</span><span class="mn">${m.name}</span><span class="ml">${"🐾".repeat(moduleLevel(m.key))}<span class="dim">${"🐾".repeat(3 - moduleLevel(m.key))}</span></span></button>`).join("")}
       </div></main>${bottomnav("home")}`;
+  }
+
+  // ------------------------------------------------------------------ Fehler-Werkstatt
+  function werkstattHTML() {
+    const s = st(), open = s.retry.length;
+    if (!open && !s.fixed_total) return "";
+    if (!open) return `<h2 class="sec">🔧 Fehler-Werkstatt</h2><div class="fix-card done"><span class="fe">✨</span>
+      <span><b>Alles ausgebessert!</b><br><span class="muted">Schon ${s.fixed_total} Fehler repariert. Super, Detektiv!</span></span></div>`;
+    return `<h2 class="sec">🔧 Fehler-Werkstatt</h2>
+      <button class="fix-card" data-act="playretry"><span class="fe">🔍</span>
+        <span class="ft"><b>${open} ${open === 1 ? "Aufgabe wartet" : "Aufgaben warten"} aufs Ausbessern</b>
+        <span>Jede reparierte Aufgabe bringt <b>${FIX_FISH} 🐟</b>${s.fixed_total ? ` · schon ${s.fixed_total} repariert` : ""}</span></span>
+        <span class="badge-n">${open}</span></button>`;
   }
 
   // ------------------------------------------------------------------ Spiel
@@ -261,7 +276,7 @@
       tasks = GEN.shuffle(st().retry).slice(0, n).map((t) => Object.assign({}, t, { fromRetry: true }));
     }
     if (!tasks.length) { toast("Keine Aufgaben gefunden."); return; }
-    S.game = { mode, tasks, idx: 0, tries: 0, input: "", results: [], fish: 0, combo: 0, locked: false, wrongChoices: [], feedback: null, mood: "happy" };
+    S.game = { mode, tasks, idx: 0, tries: 0, input: "", results: [], fish: 0, combo: 0, locked: false, wrongChoices: [], feedback: null, mood: "happy", fixed: 0 };
     S.view = "game"; render();
     if (S.boot.settings.tts_auto) setTimeout(() => speak(speakable(tasks[0])), 350);
   }
@@ -308,9 +323,10 @@
       <header class="game-top"><button class="x" data-act="quit" aria-label="Beenden">✕</button>
         <div class="paws">${paws}</div><span class="pill fish">🐟 +${g.fish}</span></header>
       <div class="mascot"><div class="m-cat">${catSVG(fc.def, { mood: g.mood, acc: fc.acc, cls: "cat-sm " + (g.feedback === "ok" ? "jump" : "") })}</div>
-        <div class="bubble small">${esc(g.bubble || pick(["Du schaffst das!", "Los geht's!", "Ich glaub an dich!"]))}</div></div>
+        <div class="bubble small">${esc(g.bubble || (t.fromRetry ? pick(["Die war letztes Mal knifflig – jetzt schaffst du's!", "Rechne ganz in Ruhe nach.", "Detektiv-Zeit! 🔍"]) : pick(["Du schaffst das!", "Los geht's!", "Ich glaub an dich!"])))}</div></div>
       <section class="task-card ${g.feedback === "ok" ? "ok" : ""} ${g.shake ? "shake" : ""}">
         <div class="prompt"><span>${esc(t.prompt)}</span><button class="say" data-act="say" aria-label="Vorlesen">🔊</button></div>
+        ${t.fromRetry ? `<div class="lastwrong">🔧 Fehler-Werkstatt${t.lastWrong ? ` · letztes Mal: <s>${esc(t.lastWrong)}</s>` : ""}</div>` : ""}
         ${gameVisual(t)}${exprHTML(t, g)}
         ${g.feedback === "hint" && t.hint ? `<div class="hint">💡 ${esc(t.hint)}</div>` : ""}
       </section>
@@ -335,10 +351,11 @@
       const first = g.tries === 0;
       g.locked = true; g.feedback = "ok"; g.mood = "joy";
       g.combo = first ? g.combo + 1 : 0;
-      let earned = first ? 1 : 0;
+      let earned = first ? (t.fromRetry ? FIX_FISH : 1) : 0;
       if (first && g.combo > 0 && g.combo % 5 === 0) { earned += 2; }
       g.fish += earned;
-      g.bubble = earned > 1 ? `${g.combo} richtig hintereinander! +${earned} 🐟` : first ? pick(["Super!", "Richtig! 🎉", "Toll gemacht!", "Spitze!", "Miau, genau!", "Wow, richtig!"]) : "Jetzt stimmt's! Gut gemacht!";
+      g.bubble = first && t.fromRetry ? pick(["Repariert! 🔧", "Fehler ausgebessert! 🎉", "Jetzt sitzt es!"]) + ` +${earned} 🐟`
+        : earned > 1 ? `${g.combo} richtig hintereinander! +${earned} 🐟` : first ? pick(["Super!", "Richtig! 🎉", "Toll gemacht!", "Spitze!", "Miau, genau!", "Wow, richtig!"]) : "Jetzt stimmt's! Gut gemacht!";
       sfx.ok(); if (earned) setTimeout(sfx.coin, 250);
       record(t, true, first, given);
       render();
@@ -349,6 +366,7 @@
     g.tries++; g.shake = true; g.combo = 0; sfx.bad();
     if (g.tries === 1) {
       g.feedback = "hint"; g.mood = "wow"; g.input = ""; g.firstWrong = given;
+      addRetry(t, given);
       if (!usesKeypad(t)) g.wrongChoices.push(given);
       g.bubble = pick(["Fast! Versuch es nochmal.", "Hmm, schau nochmal genau.", "Nicht ganz – du schaffst das!"]);
       render();
@@ -357,7 +375,6 @@
       g.feedback = "solution"; g.mood = "happy"; g.locked = true;
       g.bubble = "Macht nichts! So geht's:";
       record(t, false, false, given);
-      addRetry(t);
       render();
     }
   }
@@ -382,19 +399,21 @@
         s.best_streak = Math.max(s.best_streak, s.streak);
         saveState();
       }
-      if (t.fromRetry && first) s.retry = s.retry.filter((r) => sig(r) !== sig(t));
+      if (t.fromRetry && first) { s.retry = s.retry.filter((r) => sig(r) !== sig(t)); s.fixed_total++; g.fixed++; saveState(); }
     }
     api("/api/attempts", { json: { profile_id: S.profile.id, items: [{ module: t.module || t.skill, skill: t.pack ? "pack:" + t.pack : t.skill,
       correct, first_try: first, question: [t.prompt, t.expr].filter(Boolean).join(" "), answer: t.answer, given: g.firstWrong ?? given }] } }).catch(() => {});
   }
 
   const sig = (t) => [t.type, t.prompt, t.expr, t.answer, JSON.stringify(t.clock || t.money || t.numberline || t.blocks || "")].join("|");
-  function addRetry(t) {
+  function addRetry(t, given) {
     const s = st();
     if (S.game && S.game.mode.trial) return;
-    const clean = Object.assign({}, t); delete clean.fromRetry;
-    if (!s.retry.some((r) => sig(r) === sig(clean))) s.retry.push(clean);
-    if (s.retry.length > 30) s.retry.shift();
+    const clean = Object.assign({}, t, { lastWrong: given }); delete clean.fromRetry;
+    const old = s.retry.find((r) => sig(r) === sig(clean));
+    if (old) old.lastWrong = given; else s.retry.push(clean);
+    if (s.retry.length > 40) s.retry.shift();
+    saveState();
   }
 
   function nextTask() {
@@ -413,9 +432,10 @@
     const rate = n ? firsts / n : 0;
     const stars = rate >= 0.9 ? 3 : rate >= 0.7 ? 2 : 1;
     const bonus = [0, 1, 3, 5][stars];
-    let goalBonus = 0;
+    let goalBonus = 0, fixAllBonus = 0;
+    if (g.mode.kind === "retry" && g.fixed > 0 && s.retry.length === 0) fixAllBonus = FIX_ALL_BONUS;
     if (S.profile.today_correct >= S.boot.settings.daily_goal && s.goal_day !== today()) { goalBonus = 5; s.goal_day = today(); }
-    s.fish += g.fish + bonus + goalBonus;
+    s.fish += g.fish + bonus + goalBonus + fixAllBonus;
     // Stufen anpassen (pro Modul)
     const levelMsgs = [];
     const byMod = {};
@@ -431,23 +451,25 @@
     if (g.mode.kind === "pack" && stars === 3) s.packstars++;
     const unlocked = checkUnlocks(true);
     saveState();
-    S.result = { stars, fish: g.fish, bonus, goalBonus, firsts, n, levelMsgs, unlocked, mode: g.mode };
+    S.result = { stars, fish: g.fish, bonus, goalBonus, fixAllBonus, fixed: g.fixed, openLeft: s.retry.length, firsts, n, levelMsgs, unlocked, mode: g.mode };
     S.game = null; S.view = "result"; render();
     sfx.fanfare(); confetti();
   }
 
   function renderResult() {
     const r = S.result, fc = favCat();
-    const msg = r.stars === 3 ? "Fantastisch!" : r.stars === 2 ? "Sehr gut!" : "Gut gemacht – üben macht stark!";
+    const msg = r.mode.kind === "retry" ? (r.fixed ? `${r.fixed} ${r.fixed === 1 ? "Fehler" : "Fehler"} repariert! 🔧` : "Weiter üben – das wird!")
+      : r.stars === 3 ? "Fantastisch!" : r.stars === 2 ? "Sehr gut!" : "Gut gemacht – üben macht stark!";
     $app.innerHTML = `<div class="screen result">
       <div class="stars">${[1, 2, 3].map((i) => `<span class="${i <= r.stars ? "on" : ""}" style="animation-delay:${i * 0.25}s"><svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" fill="currentColor" stroke="rgba(0,0,0,.12)" stroke-width="1" stroke-linejoin="round"/></svg></span>`).join("")}</div>
       <h1>${msg}</h1>
       ${catSVG(fc.def, { mood: "joy", acc: fc.acc, cls: "cat-lg jump" })}
       <p class="big">${r.firsts} von ${r.n} gleich richtig</p>
-      <div class="loot"><span>🐟 +${r.fish}</span>${r.bonus ? `<span>⭐ Sterne-Bonus +${r.bonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}</div>
+      <div class="loot"><span>🐟 +${r.fish}</span>${r.bonus ? `<span>⭐ Sterne-Bonus +${r.bonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}${r.fixAllBonus ? `<span>🧹 Werkstatt leer +${r.fixAllBonus}</span>` : ""}</div>
+      ${r.mode.kind === "retry" && r.openLeft ? `<p class="muted">Noch ${r.openLeft} in der Fehler-Werkstatt.</p>` : ""}
       ${r.levelMsgs.map((m) => `<div class="levelup">⬆️ ${esc(m)}</div>`).join("")}
       ${st().fish >= BASKET_PRICE && commonLeft() > 0 ? `<button class="btn big pulse" data-act="nav" data-v="shop">🧺 Kätzchen-Körbchen öffnen!</button>` : ""}
-      <div class="row"><button class="btn ghost big" data-act="nav" data-v="home">Fertig</button><button class="btn big" data-act="again">Nochmal 🔁</button></div>
+      <div class="row"><button class="btn ghost big" data-act="nav" data-v="home">Fertig</button>${r.mode.kind === "retry" && !r.openLeft ? "" : `<button class="btn big" data-act="again">Nochmal 🔁</button>`}</div>
     </div>`;
     if (r.unlocked.length) setTimeout(() => revealCat(r.unlocked[0], true), 900);
   }
@@ -472,7 +494,7 @@
     const s = st(), out = [];
     CATS.filter((c) => c.rare && !owned(c.id)).forEach((c) => {
       const u = c.unlock;
-      const ok = (u.type === "streak" && s.best_streak >= u.n) || (u.type === "total" && s.total_correct >= u.n) || (u.type === "packstar" && s.packstars >= u.n);
+      const ok = (u.type === "streak" && s.best_streak >= u.n) || (u.type === "total" && s.total_correct >= u.n) || (u.type === "packstar" && s.packstars >= u.n) || (u.type === "fixed" && s.fixed_total >= u.n);
       if (ok) { s.cats.push({ id: c.id, acc: null }); out.push(c.id); }
     });
     if (out.length && !returnList) { saveState(); setTimeout(() => revealCat(out[0], true), 600); }
@@ -631,6 +653,7 @@
         <div class="kpi"><b>${prof.state.cats.length} 🐱 · ${prof.state.fish} 🐟</b><span>Kätzchen · Fischlein</span></div>
       </div>
       ${weak.length ? `<div class="note warn">💡 Hier lohnt sich Üben: <b>${weak.join(", ")}</b> – z.B. ein KI-Paket dazu erstellen.</div>` : ""}
+      <div class="note">🔧 Fehler-Werkstatt: <b>${(prof.state.retry || []).length}</b> offen · <b>${prof.state.fixed_total || 0}</b> schon ausgebessert</div>
       <h3>Letzte 14 Tage</h3>
       <div class="days">${d.days.map((x) => `<div class="day" title="${x.day}: ${x.n} Aufgaben, ${x.first_try} gleich richtig">
         <div class="bar"><i style="height:${x.n / maxDay * 100}%"></i><i class="ok" style="height:${x.first_try / maxDay * 100}%"></i></div>

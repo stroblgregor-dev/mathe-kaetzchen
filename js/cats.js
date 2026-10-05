@@ -31,6 +31,8 @@
       unlock: { type: "total", n: 150, text: "150 Aufgaben richtig lösen" } },
     { id: "goldi",     name: "Goldi",      fur: "#f5c84b", dark: "#d49a12", belly: "#fff3c4", eye: "#16a34a", pattern: "magic", rare: true,
       unlock: { type: "streak", n: 7, text: "7 Tage hintereinander üben" } },
+    { id: "detektiv",  name: "Detektiv",   fur: "#b08455", dark: "#6e4a2b", belly: "#f1dfc6", eye: "#3b82f6", pattern: "tabby", rare: true,
+      unlock: { type: "fixed", n: 15, text: "15 Fehler in der Werkstatt ausbessern" } },
     { id: "mondi",     name: "Mondi",      fur: "#33407a", dark: "#1e2754", belly: "#5b6bb5", eye: "#fde68a", pattern: "magic", rare: true,
       unlock: { type: "packstar", n: 1, text: "Ein Schul-Paket mit 3 Sternen schaffen" } },
   ];
