@@ -483,3 +483,27 @@ h1, h2, h3 { margin: 0; font-weight: 700; }
 .food-shop { grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .food-shop .acc-card { padding: 10px 6px; }
 .food-shop .ae { font-size: 2rem; }
+
+/* ---------- Abstände (einheitlicher Rhythmus) ---------- */
+.home > section, .home > .care-card, .home > .gift-banner, .home > .event-banner { margin-top: 16px; }
+.sec { margin: 28px 0 12px; }
+.title { margin: 10px 0 16px; }
+.cats .care-card { margin: 0 0 20px; }
+.cat-grid { gap: 14px; margin-bottom: 8px; }
+.cats .sec { margin-top: 32px; }
+.shop .gift-banner { margin: 0 0 8px; }
+.stock { margin: 0 0 14px; line-height: 1.5; }
+.acc-shop { gap: 14px; }
+.acc-card { gap: 8px; padding: 14px 10px; }
+.event-next { margin: 22px 0 0; }
+.shop-tabs { margin-bottom: 14px; }
+.shop-basket { margin-top: 4px; }
+.cat-detail h2 { margin: 6px 0 4px; }
+.cat-detail .stage { margin: 4px 0 10px; }
+.grow-bar { margin: 0 auto 14px; }
+.cat-detail .status { margin: 0 0 16px; }
+.care-row { margin: 0 0 18px; gap: 12px; }
+.cat-detail > p.small { margin: 0 0 14px; }
+.cat-detail h3 { margin: 20px 0 8px; }
+.cat-detail .row { margin-top: 22px; }
+.care-remind { margin: 6px 0; }
