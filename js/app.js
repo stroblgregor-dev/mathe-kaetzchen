@@ -1472,7 +1472,8 @@
         <div class="pinfo"><b>${esc(p.title)}</b><span class="muted small">${p.source === "lernzettel" ? "aus Lernzettel" : "KI-erstellt"} · ${p.count} Aufgaben · ${new Date(p.created).toLocaleDateString("de-AT")}</span>
           ${p.summary ? `<span class="small">${esc(p.summary)}</span>` : ""}</div>
         <label class="switch" title="Für das Kind sichtbar"><input type="checkbox" data-act="packactive" data-id="${p.id}" ${p.active ? "checked" : ""}><i></i></label>
-        <button class="btn small ghost" data-act="openpack" data-id="${p.id}">Ansehen</button></div>`).join("")}</div>`
+        <div class="row-actions"><button class="btn small ghost" data-act="renamepack" data-id="${p.id}" title="Umbenennen">✏️</button>
+        <button class="btn small ghost" data-act="openpack" data-id="${p.id}">Ansehen</button></div></div>`).join("")}</div>`
       : `<div class="card"><p>Noch keine Lernpakete. Lade einen 📷 Lernzettel hoch oder erstelle ein ✨ KI-Paket.</p></div>`;
   }
 
@@ -1493,7 +1494,8 @@
   async function openPack(id) {
     const p = await api(`/api/admin/packs/${id}`);
     S.openPack = p;
-    showOverlay(`<div class="pack-detail"><h2>${esc(p.emoji)} <span contenteditable="true" id="ptitle">${esc(p.title)}</span></h2>
+    showOverlay(`<div class="pack-detail"><h2>${esc(p.emoji)} <span id="ptitle">${esc(p.title)}</span>
+      <button class="btn small ghost" data-act="renamepack" data-id="${p.id}">✏️ Umbenennen</button></h2>
       <p class="muted">${esc(p.summary)}</p>
       ${p.meta && p.meta.dropped ? `<div class="note">ℹ️ ${p.meta.dropped} Aufgabe(n) wurden automatisch aussortiert, weil die Lösung nicht nachrechenbar stimmte.</div>` : ""}
       <ol class="task-list">${p.tasks.map(taskPreview).join("")}</ol>
@@ -1578,6 +1580,26 @@
       await api("/api/admin/settings", { json: extra });
       await loadAdmin(); await refreshBoot(); toast("Gespeichert ✅");
     } catch (e) { toast(e.message); }
+  }
+
+  // ------------------------------------------------------------------ Eltern: Inhalte umbenennen
+  const RENAME_EMOJIS = ["📄", "📚", "✏️", "🧩", "🐱", "🧮", "⭐", "🍎", "🎈", "🚀", "🌈", "🕒", "💶", "📏", "✖️", "🦄", "⚽", "🎃", "🎄", "🐣"];
+  async function renamePackDialog(id) {
+    const p = await api(`/api/admin/packs/${id}`);
+    S.renaming = { id, emoji: p.emoji || "📄" };
+    showOverlay(`<h2>✏️ Umbenennen</h2>
+      <label class="lbl">Name<input id="rn_title" class="field big" maxlength="60" value="${esc(p.title)}"></label>
+      <label class="lbl">Symbol</label>
+      <div class="chips rn-emojis">${RENAME_EMOJIS.map((e) => `<button class="chip ${S.renaming.emoji === e ? "on" : ""}" data-act="rnemoji" data-e="${e}">${e}</button>`).join("")}</div>
+      <div class="row"><button class="btn ghost" data-act="close">Abbrechen</button><button class="btn" data-act="rnsave">💾 Speichern</button></div>`);
+    setTimeout(() => { const i = document.getElementById("rn_title"); if (i) { i.focus(); i.select(); } }, 60);
+  }
+  async function renamePackSave() {
+    const title = (document.getElementById("rn_title")?.value || "").trim();
+    if (!title) { toast("Bitte einen Namen eingeben."); return; }
+    await api(`/api/admin/packs/${S.renaming.id}`, { json: { title, emoji: S.renaming.emoji } });
+    S.renaming = null; hideOverlay(); await loadAdmin(); await refreshBoot(); renderParent();
+    toast("Umbenannt ✅");
   }
 
   // ------------------------------------------------------------------ Eltern: Baukasten
@@ -1691,7 +1713,8 @@
           <div class="pinfo"><b>${esc(p.title)}</b><span class="muted small">${p.count} Aufgaben · ${new Date(p.created).toLocaleDateString("de-AT")}</span>
             <span class="small">${packSummary(p.id)}</span></div>
           <label class="switch" title="Beim Kind sichtbar"><input type="checkbox" data-act="packactive" data-id="${p.id}" ${p.active ? "checked" : ""}><i></i></label>
-          <div class="row-actions"><button class="btn small ghost" data-act="bedit" data-id="${p.id}">✏️</button>
+          <div class="row-actions"><button class="btn small ghost" data-act="renamepack" data-id="${p.id}" title="Umbenennen">🏷️</button>
+          <button class="btn small ghost" data-act="bedit" data-id="${p.id}" title="Aufgaben bearbeiten">✏️</button>
           <button class="btn small ghost" data-act="bstats" data-id="${p.id}" title="Fortschritt">📊</button>
           <button class="btn small ghost" data-act="btry" data-id="${p.id}" title="Probe spielen">▶️</button>
           <button class="btn small ghost" data-act="bdelete" data-id="${p.id}" title="Löschen">🗑</button></div></div>`).join("")}</div>`
@@ -1830,6 +1853,9 @@
         case "brm": syncBuilder(); S.builder.tasks.splice(Number(d.i), 1); pBuilder(); break;
         case "bsave": await saveBuilder(); break;
         case "bstats": await loadAdmin(); packStatsDialog(Number(d.id)); break;
+        case "renamepack": await renamePackDialog(Number(d.id)); break;
+        case "rnemoji": S.renaming.emoji = d.e; document.querySelectorAll(".rn-emojis .chip").forEach((b) => b.classList.toggle("on", b === el)); break;
+        case "rnsave": await renamePackSave(); break;
         case "bdelete":
           if (confirm("Diese Übung löschen?")) { await api(`/api/admin/packs/${d.id}`, { method: "DELETE" }); await loadAdmin(); await refreshBoot(); pBuilder(); }
           break;

@@ -573,3 +573,7 @@ h1, h2, h3 { margin: 0; font-weight: 700; }
 
 .tbl-cols { display: grid; grid-template-columns: repeat(5, auto); gap: 6px; }
 .tbl-col .fcell { min-width: 46px; }
+.pack-row { flex-wrap: wrap; }
+.pack-row .pinfo { flex: 1 1 55%; min-width: 150px; }
+.pack-row .row-actions { margin-left: auto; }
+.pack-detail h2 .btn { vertical-align: middle; margin-left: 6px; }
