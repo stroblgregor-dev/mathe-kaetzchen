@@ -22,6 +22,9 @@
     laengen: "Längen (cm, m)",
     geometrie: "Formen und Körper, Symmetrie",
     muster: "Zahlenfolgen und Muster",
+    hundert: "Hunderterfeld, Zahlen bis 1000, Ordnungszahlen",
+    groessen: "Gewicht (kg, dag) und Liter",
+    forschen: "Forschen und Entdecken (Zauberquadrat, Sudoku, Kryptogramm)",
     sonstiges: "Sonstiges",
   };
   const TASK_TYPES = ["input", "choice", "compare", "clock", "money", "numberline", "blocks", "figure"];
@@ -43,7 +46,8 @@
     numberline: nullable(obj({ min: { type: "integer" }, max: { type: "integer" }, marker: { type: "integer" } })),
     blocks: nullable(obj({ tens: { type: "integer" }, ones: { type: "integer" } })),
     figure: nullable(obj({
-      kind: { type: "string", enum: ["triangle", "wall", "house", "family", "table", "list"] },
+      kind: { type: "string", enum: ["triangle", "wall", "house", "family", "table", "list", "grid"] },
+      op: nullable({ type: "string" }), rows: { type: "array", items: { type: "integer" } }, cols: { type: "array", items: { type: "integer" } },
       roof: nullable({ type: "integer" }), label: nullable({ type: "string" }),
       lines: { type: "array", items: { type: "string" } },
       cells: { type: "array", items: obj({ v: { type: "integer" }, given: { type: "boolean" } }) },
@@ -93,7 +97,9 @@ Aufgabentypen (Feld "type") – alle nicht benötigten Felder sind null bzw. cho
   * "table" (Tabelle): label z.B. "das Doppelte", "die Hälfte", "· 5"; cells = [Zahl, Ergebnis, Zahl, Ergebnis, …], Zahlen given=true.
   * "list" (Päckchen, z.B. "Die kleine Aufgabe hilft"): lines = ["2 + 5 = 7", "12 + 5 = ?", …] (je Zeile höchstens ein ?),
     cells = die Lösungen der ? in Reihenfolge (alle given=false).
-  Nicht benötigte Felder: roof = null, label = null, lines = [].
+  * "grid" (Rechengitter / Einmaleinstabelle): op = "+" oder "·", rows = Zahlen links, cols = Zahlen oben,
+    cells zeilenweise = rows[i] op cols[j].
+  Nicht benötigte Felder: roof = null, label = null, op = null, lines = [], rows = [], cols = [].
   Nutze "figure", wenn am Lernzettel solche Darstellungen vorkommen (Rechendreiecke, Zahlenmauern, Zahlenhäuser, Sterne/Zahlenfamilien, Tabellen).
 
 "hint": ein kurzer, freundlicher Tipp, ohne das Ergebnis zu verraten.
@@ -216,7 +222,7 @@ Titel kurz und kindgerecht (max. 4 Wörter), "summary" ist ein Satz für die Elt
     if (typ === "numberline") {
       const n = t.numberline || {};
       if (!isInt(n.min) || !isInt(n.max) || !isInt(n.marker)) return null;
-      if (n.marker < n.min || n.marker > n.max || ![10, 20, 50, 100].includes(n.max - n.min)) return null;
+      if (n.marker < n.min || n.marker > n.max || ![10, 20, 50, 100, 1000].includes(n.max - n.min)) return null;
       if (norm(t.answer) !== String(n.marker)) return null;
     }
     if (typ === "blocks") {

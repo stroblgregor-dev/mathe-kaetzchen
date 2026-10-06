@@ -201,6 +201,17 @@
     return rest === 0 ? out : null;
   }
   function genGeld(level) {
+    if (level === 3 && Math.random() < 0.35) {
+      const e = rnd(1, 9), c = pick([10, 20, 30, 40, 50, 60, 70, 80, 90, 5, 25, 45, 75, 95]);
+      const ans = `${e},${String(c).padStart(2, "0")}`;
+      if (Math.random() < 0.5) {
+        const coins = coinsFor(e * 100 + c, [500, 200, 100, 50, 20, 10, 5]);
+        if (coins) return task({ type: "money", skill: "geld", prompt: "Wie viel Geld ist das? Schreib mit Komma.", money: shuffle(coins), answer: ans, unit: "€", decimal: true,
+          hint: "Zähle zuerst die Euro, dann die Cent. Vor das Komma kommen die Euro.", explain: `${e} € und ${c} c = ${ans} €` });
+      }
+      return task({ skill: "geld", prompt: "Schreib mit Komma!", expr: `${e} € ${c} c = ? €`, answer: ans, decimal: true,
+        hint: "Vor das Komma kommen die Euro, danach immer zwei Ziffern für die Cent.", explain: `${e} € ${c} c = ${ans} €` });
+    }
     const k = level === 1 ? pick(["cents", "cents", "euros"]) : level === 2 ? pick(["euros", "cents", "missing", "compare"]) : pick(["change", "shop", "missing", "euros"]);
     if (k === "cents") {
       const set = level === 1 ? [50, 20, 10, 5, 2, 1] : [50, 20, 10, 5, 2, 1];
@@ -280,7 +291,19 @@
   const DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const MONTHS = ["Jänner", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 
+  function genSekunden(level) {
+    if (level === 2 || Math.random() < 0.5) {
+      const q = pick([["Wie viele Sekunden hat eine Minute?", 60], ["Wie viele Sekunden sind eine halbe Minute?", 30]]);
+      if (level === 3 && Math.random() < 0.6) { const s = rnd(1, 3) * 10; return task({ skill: "zeit", prompt: "Wie viele Sekunden sind das?", expr: `1 min ${s} s = ? s`, answer: 60 + s, unit: null, hint: "1 Minute = 60 Sekunden.", explain: `60 s + ${s} s = ${60 + s} s` }); }
+      return task({ skill: "zeit", prompt: q[0], answer: q[1], hint: "Zähle die Sekunden beim Sekundenzeiger einmal rundherum.", explain: `Richtig ist ${q[1]}.` });
+    }
+    const q = pick([["Was dauert ungefähr 1 Sekunde?", "Einmal klatschen", ["Einmal klatschen", "Zähne putzen", "Eine Nacht schlafen"]],
+      ["Was dauert ungefähr 1 Minute?", "Hände waschen", ["Hände waschen", "Einmal blinzeln", "Ein Schultag"]]]);
+    return task({ type: "choice", skill: "zeit", prompt: q[0], choices: shuffle(q[2]), answer: q[1], hint: "Stell es dir vor und zähle dabei langsam.", explain: `${q[1]}.` });
+  }
+
   function genZeit(level) {
+    if (level >= 2 && Math.random() < 0.25) return genSekunden(level);
     const k = level === 1 ? pick(["facts", "day", "month", "later"]) : level === 2 ? pick(["facts", "later", "duration", "day", "month"]) : pick(["duration", "later", "minutes", "facts"]);
     if (k === "facts") {
       const f = pick([["Wie viele Minuten hat eine Stunde?", 60], ["Wie viele Tage hat eine Woche?", 7], ["Wie viele Stunden hat ein Tag?", 24],
@@ -504,8 +527,21 @@
       "Rechne zuerst die kleine Aufgabe – die Einer bleiben gleich, nur die Zehner ändern sich.", lines.slice(1).map((l, k) => l.replace("?", vals[k])).join(", "));
   }
 
+  function genGridPlus(level) {
+    const pickN = () => (level === 1 ? rnd(1, 9) : level === 2 ? rnd(1, 4) * 10 + rnd(0, 4) : rnd(11, 49));
+    let R, C;
+    for (let i = 0; i < 50; i++) {
+      R = [pickN(), pickN()]; C = [pickN(), pickN()];
+      const ok = R.every((a) => C.every((b) => a + b <= (level === 1 ? 20 : 100) && (level !== 2 || (a % 10) + (b % 10) < 10)));
+      if (ok && new Set(R).size === 2 && new Set(C).size === 2) break;
+    }
+    const v = []; R.forEach((a) => C.forEach((b) => v.push(a + b)));
+    return figTask("raetsel", "Rechengitter: Fülle aus!", { kind: "grid", op: "+", rows: R, cols: C, cells: v.map((x) => ({ v: x, given: false })) },
+      "Rechne die Zahl links plus die Zahl oben.", R.map((a) => C.map((b) => `${a}+${b}=${a + b}`).join(", ")).join("; "));
+  }
+
   function genRaetsel(level) {
-    return pick([genTriangle, genTriangle, genWall, genWall, genHouse, genFamily, genAnalogy])(level);
+    return pick([genTriangle, genTriangle, genWall, genWall, genHouse, genFamily, genAnalogy, genGridPlus])(level);
   }
 
   // ------------------------------------------------------------------ Verdoppeln & Halbieren
@@ -525,15 +561,25 @@
     return task({ skill: "doppelt", prompt: `Wie viel ist die Hälfte von ${x}?`, expr: null, answer: x / 2, hint: "Welche Zahl plus sich selbst ergibt " + x + "?", explain: `${x / 2} + ${x / 2} = ${x}` });
   }
 
-  // ------------------------------------------------------------------ Einmaleins & Teilen
+  // ------------------------------------------------------------------ Einmaleins & Teilen (Reihenfolge wie im Buch)
+  const ROWS_BY_LEVEL = { 1: [2, 10, 5], 2: [2, 10, 5, 3, 6, 9, 4], 3: [2, 3, 4, 5, 6, 7, 8, 9, 10] };
+  const DIV_BY_LEVEL = { 1: [2, 10], 2: [2, 5, 10], 3: [2, 3, 4, 5, 6, 7, 8, 9, 10] };
   function genEinmaleins(level) {
-    const rows = level === 1 ? [2, 5, 10] : level === 2 ? [2, 3, 4, 5, 10] : [2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const rows = ROWS_BY_LEVEL[level] || ROWS_BY_LEVEL[1];
     const r = pick(rows), n = rnd(1, 10), p = r * n;
-    const k = level === 1 ? pick(["dots", "mal", "mal", "table"]) : level === 2 ? pick(["mal", "tausch", "gap", "dots", "table", "story"]) : pick(["mal", "div", "div", "gap", "divgap", "story"]);
+    const kinds = level === 1 ? ["dots", "mal", "mal", "table", "schnecke", "schnecke", "tausch"]
+      : level === 2 ? ["mal", "gap", "grid", "div", "dots", "quad", "schnecke", "table"]
+      : ["mal", "div", "divrest", "divrest", "messen", "grid", "divgap", "story", "quad"];
+    const k = pick(kinds);
     if (k === "dots") {
       const rr = Math.min(r, n) <= 5 ? Math.min(r, n) : r, cc = rr === r ? n : r;
       return task({ skill: "einmaleins", prompt: "Wie viele Punkte sind es?", expr: `${rr} · ${cc} = ?`, answer: rr * cc, visual: { kind: "dots", rows: rr, cols: cc },
         hint: `Zähle eine Reihe und rechne dann ${rr} mal.`, explain: `${rr} · ${cc} = ${rr * cc}` });
+    }
+    if (k === "schnecke") {
+      const m = rnd(2, 5), lines = [`${Array(m).fill(r).join(" + ")} = ?`, `? · ${r} = ${m * r}`];
+      return figTask("einmaleins", "Schneckenaufgabe und Mausaufgabe!", { kind: "list", lines, cells: [{ v: m * r, given: false }, { v: m, given: false }] },
+        `Zähle, wie oft die ${r} vorkommt – das ist die Mausaufgabe.`, `${lines[0].replace("?", m * r)} → ${m} · ${r} = ${m * r}`);
     }
     if (k === "table") {
       const xs = shuffle(Array.from({ length: 10 }, (_, i) => i + 1)).slice(0, 5).sort((a, b) => a - b);
@@ -541,15 +587,36 @@
       return figTask("einmaleins", `Malreihe mit ${r}!`, fig("table", v, v.map((_, i) => i).filter((i) => i % 2 === 0), { label: `· ${r}` }),
         `Rechne jede Zahl mal ${r}. Tipp: Die Reihe springt immer um ${r} weiter.`, null);
     }
+    if (k === "grid") {
+      const R = shuffle(rows).slice(0, 2).sort((a, b) => a - b), C = shuffle([2, 3, 4, 5, 6, 7, 8, 9, 10].filter((x) => level === 3 || x <= 6)).slice(0, level === 3 ? 3 : 2).sort((a, b) => a - b);
+      const v = []; R.forEach((a) => C.forEach((b) => v.push(a * b)));
+      const given = level === 3 ? [rnd(0, v.length - 1)] : [];
+      return figTask("einmaleins", "Einmaleinstabelle: Fülle aus!", { kind: "grid", op: "·", rows: R, cols: C, cells: v.map((x, i) => ({ v: x, given: given.includes(i) })) },
+        "Rechne die Zahl links mal die Zahl oben.", R.map((a) => C.map((b) => `${a}·${b}=${a * b}`).join(", ")).join("; "));
+    }
+    if (k === "quad") { const q = rnd(2, level === 3 ? 10 : 6); return task({ skill: "einmaleins", prompt: "Quadratzahl: Rechne!", expr: `${q} · ${q} = ?`, answer: q * q, visual: { kind: "dots", rows: q, cols: q }, hint: "Quadratzahlen bilden ein Quadrat aus Punkten.", explain: `${q} · ${q} = ${q * q}` }); }
     if (k === "tausch") return task({ skill: "einmaleins", prompt: "Tauschaufgabe: Was kommt heraus?", expr: `${n} · ${r} = ?`, answer: p, hint: `Tausche: ${r} · ${n} ist genauso viel.`, explain: `${n} · ${r} = ${r} · ${n} = ${p}` });
     if (k === "gap") return task({ skill: "einmaleins", prompt: "Welche Zahl fehlt?", expr: `? · ${r} = ${p}`, answer: n, hint: `Zähle in ${r}er-Schritten bis ${p}.`, explain: `${n} · ${r} = ${p}` });
-    if (k === "div") return task({ skill: "einmaleins", prompt: "Teile!", expr: `${p} : ${r} = ?`, answer: n, hint: `Wie oft passt die ${r} in die ${p}? Die Malaufgabe hilft.`, explain: `${n} · ${r} = ${p}, also ${p} : ${r} = ${n}` });
-    if (k === "divgap") return task({ skill: "einmaleins", prompt: "Welche Zahl fehlt?", expr: `${p} : ? = ${n}`, answer: r, hint: "Denk an die Malaufgabe.", explain: `${p} : ${r} = ${n}` });
+    if (k === "div" || k === "divgap") {
+      const d = pick(DIV_BY_LEVEL[level] || DIV_BY_LEVEL[1]), q = rnd(1, 10), a = d * q;
+      return k === "div"
+        ? task({ skill: "einmaleins", prompt: "Teile!", expr: `${a} : ${d} = ?`, answer: q, hint: `Wie oft passt die ${d} in die ${a}? Die Umkehraufgabe ? · ${d} = ${a} hilft.`, explain: `${q} · ${d} = ${a}, also ${a} : ${d} = ${q}` })
+        : task({ skill: "einmaleins", prompt: "Welche Zahl fehlt?", expr: `${a} : ? = ${q}`, answer: d, hint: "Denk an die Malaufgabe.", explain: `${a} : ${d} = ${q}` });
+    }
+    if (k === "divrest") {
+      const d = pick([2, 3, 4, 5, 10, 6, 9]), q = rnd(1, 9), rest = rnd(1, d - 1), a = d * q + rest;
+      return figTask("einmaleins", "Teilen mit Rest!", { kind: "divrest", a, b: d, cells: [{ v: q, given: false }, { v: rest, given: false }] },
+        `Welche Zahl aus der ${d}er-Reihe passt am besten unter ${a}? Was übrig bleibt, ist der Rest.`, `${a} : ${d} = ${q} Rest ${rest}`);
+    }
+    if (k === "messen") {
+      const d = pick([2, 5, 10, 3, 4]), q = rnd(2, 10), a = d * q;
+      return task({ skill: "einmaleins", prompt: `Messen: Wie oft passt die ${d} in die ${a}?`, expr: `${d} in ${a} = ?`, answer: q, hint: `Lege ${d}er-Streifen hintereinander, bis du bei ${a} bist.`, explain: `${q} · ${d} = ${a}, also ${d} in ${a} = ${q}` });
+    }
     if (k === "story") {
       const st = pick([
-        [`${n} Kätzchen haben je 4 Pfoten. Wie viele Pfoten sind das?`, n * 4, 4],
-        [`Ein Päckchen hat ${r} Leckerli. Kalea kauft ${n} Päckchen. Wie viele Leckerli sind das?`, p, r],
-        [`${p} Fischlein werden gerecht an ${r} Kätzchen verteilt. Wie viele bekommt jedes?`, n, r],
+        [`${n} Kätzchen haben je 4 Pfoten. Wie viele Pfoten sind das?`, n * 4],
+        [`Ein Päckchen hat ${r} Leckerli. Kalea kauft ${n} Päckchen. Wie viele Leckerli sind das?`, p],
+        [`${p} Fischlein werden gerecht an ${r} Kätzchen verteilt. Wie viele bekommt jedes?`, n],
       ]);
       return task({ skill: "einmaleins", prompt: st[0], answer: st[1], hint: "Mal oder geteilt? Mal dir die Aufgabe auf.", explain: `Ergebnis: ${st[1]}` });
     }
@@ -612,8 +679,123 @@
       hint: st === "alt" ? "Schau genau: Die Sprünge wechseln sich ab." : "Wie groß ist der Sprung von einer Zahl zur nächsten?", explain: st === "alt" ? "Immer abwechselnd +2 und +3." : `Immer ${st > 0 ? "+" : "−"}${Math.abs(st)}.` });
   }
 
+  // ------------------------------------------------------------------ Hunderterfeld, Zahlen bis 1000, Ordnungszahlen
+  function genHundert(level) {
+    const k = level === 1 ? pick(["field", "field", "ord", "nb"]) : level === 2 ? pick(["field", "h", "hline", "ord"]) : pick(["h", "hcalc", "hline", "hcmp", "field"]);
+    if (k === "field") {
+      const col = rnd(0, 7), row = rnd(0, 7), start = row * 10 + col + 1;
+      const v = Array.from({ length: 9 }, (_, i) => start + Math.floor(i / 3) * 10 + (i % 3));
+      const given = level === 1 ? [4, pick([0, 2, 6, 8])] : [pick([0, 1, 2, 3, 4, 5, 6, 7, 8])];
+      return figTask("hundert", "Hunderterfeld: Ergänze den Ausschnitt!", fig("hfield", v, given), "Nach rechts +1, nach unten +10.", null);
+    }
+    if (k === "nb") { const n = rnd(12, 98); return task({ type: "choice", skill: "hundert", prompt: `Welche Zahl steht im Hunderterfeld genau unter ${n - 10}?`, choices: shuffle([String(n), String(n - 9), String(n + 1)]), answer: String(n), hint: "Darunter heißt: 10 mehr.", explain: `${n - 10} + 10 = ${n}` }); }
+    if (k === "ord") {
+      const len = 6, mark = rnd(0, 5), ans = `${mark + 1}.`;
+      return task({ type: "choice", skill: "hundert", prompt: "Das wievielte Kätzchen in der Reihe trägt den Hut? (Gezählt wird von links)", visual: { kind: "row", n: len, mark },
+        choices: shuffle([ans, `${mark + 2}.`, `${mark === 0 ? 3 : mark}.`].filter((x, i, a) => a.indexOf(x) === i)), answer: ans, hint: "Zähle von links: erstes, zweites, drittes …", explain: `Es ist das ${ans} Kätzchen.` });
+    }
+    if (k === "h") {
+      const h = rnd(1, 8) * 100, up = Math.random() < 0.5;
+      return task({ skill: "hundert", prompt: up ? `Welche Hunderterzahl kommt nach ${h}?` : `Welche Hunderterzahl kommt vor ${h + 100}?`, answer: up ? h + 100 : h, hint: "Hunderterzahlen: 100, 200, 300 …", explain: up ? `Nach ${h} kommt ${h + 100}.` : `Vor ${h + 100} kommt ${h}.` });
+    }
+    if (k === "hline") { const m = rnd(1, 9) * 100; return task({ type: "numberline", skill: "hundert", prompt: "Welche Zahl zeigt der Pfeil?", numberline: { min: 0, max: 1000, marker: m }, answer: m, hint: "Jeder lange Strich ist 100 mehr.", explain: `Der Pfeil zeigt auf ${m}.` }); }
+    if (k === "hcalc") { const a = rnd(1, 8) * 100, b = rnd(1, (1000 - a) / 100) * 100, plus = Math.random() < 0.5 || a === b;
+      return plus ? task({ skill: "hundert", prompt: "Rechne mit Hunderterzahlen!", expr: `${a} + ${b} = ?`, answer: a + b, hint: `Denk an ${a / 100} + ${b / 100}.`, explain: `${a / 100} + ${b / 100} = ${(a + b) / 100}, also ${a + b}` })
+        : task({ skill: "hundert", prompt: "Rechne mit Hunderterzahlen!", expr: `${Math.max(a, b)} - ${Math.min(a, b)} = ?`, answer: Math.abs(a - b), hint: "Denk an die kleine Aufgabe ohne Nullen.", explain: `${Math.max(a, b)} - ${Math.min(a, b)} = ${Math.abs(a - b)}` }); }
+    const a = rnd(1, 9) * 100 + rnd(0, 9) * 10, b = rnd(1, 9) * 100 + rnd(0, 9) * 10;
+    if (a === b) return genHundert(level);
+    return task({ type: "compare", skill: "hundert", prompt: "Setze das richtige Zeichen ein.", expr: `${a} ? ${b}`, choices: ["<", ">", "="], answer: a < b ? "<" : ">", hint: "Vergleiche zuerst die Hunderter.", explain: `${a} ${a < b ? "<" : ">"} ${b}` });
+  }
+
+  // ------------------------------------------------------------------ Gewicht (kg, dag) & Liter
+  function genGroessen(level) {
+    const k = level === 1 ? pick(["kg", "weights", "schaetz", "liter"]) : level === 2 ? pick(["weights", "fehlt", "kgdag", "liter", "literstory"]) : pick(["umw", "cmp", "fehlt", "litermal", "weights"]);
+    if (k === "kg") return task({ type: "choice", skill: "groessen", prompt: "Wie viel Dekagramm hat 1 Kilogramm?", choices: shuffle(["10 dag", "100 dag", "1000 dag"]), answer: "100 dag", hint: "1 kg = 100 dag.", explain: "1 kg = 100 dag" });
+    if (k === "weights") {
+      const set = level === 1 ? [50, 20, 10, 5, 2, 1] : [100, 50, 20, 10, 5];
+      const total = level === 1 ? rnd(3, 19) * 5 : rnd(11, 39) * 5;
+      const ws = coinsFor(total, set);
+      if (!ws) return genGroessen(level);
+      return task({ skill: "groessen", prompt: "Wie schwer ist das zusammen? (in dag)", visual: { kind: "weights", values: shuffle(ws) }, answer: total, unit: "dag",
+        hint: "1 kg = 100 dag. Zähle alle Gewichte zusammen.", explain: `${ws.sort((a, b) => b - a).map((w) => (w >= 100 ? w / 100 + " kg" : w + " dag")).join(" + ")} = ${total} dag` });
+    }
+    if (k === "schaetz") { const q = pick([["Was ist ungefähr 1 kg schwer?", "Ein Paket Mehl", ["Ein Paket Mehl", "Eine Feder", "Ein Auto"]], ["Was ist am schwersten?", "Ein Elefant", ["Ein Elefant", "Eine Katze", "Eine Maus"]]]);
+      return task({ type: "choice", skill: "groessen", prompt: q[0], choices: shuffle(q[2]), answer: q[1], hint: "Stell dir vor, du hebst es hoch.", explain: q[1] + "." }); }
+    if (k === "fehlt") { const a = rnd(1, 19) * 5; return task({ skill: "groessen", prompt: `Im Futtersack sind ${a} dag. Wie viel fehlt auf 1 kg?`, answer: 100 - a, unit: "dag", hint: "1 kg = 100 dag. Ergänze auf 100.", explain: `${a} + ${100 - a} = 100 dag` }); }
+    if (k === "kgdag") { const d = rnd(1, 9) * 10; return task({ skill: "groessen", prompt: "Wie viel Dekagramm?", expr: `1 kg ${d} dag = ? dag`, answer: 100 + d, hint: "1 kg = 100 dag, dann dazuzählen.", explain: `100 dag + ${d} dag = ${100 + d} dag` }); }
+    if (k === "umw") { const n = rnd(2, 9); return Math.random() < 0.5 ? task({ skill: "groessen", prompt: "Wie viel Dekagramm?", expr: `${n} kg = ? dag`, answer: n * 100, hint: "1 kg = 100 dag.", explain: `${n} kg = ${n * 100} dag` })
+      : task({ skill: "groessen", prompt: "Wie viel Kilogramm?", expr: `${n * 100} dag = ? kg`, answer: n, hint: "100 dag = 1 kg.", explain: `${n * 100} dag = ${n} kg` }); }
+    if (k === "cmp") { const a = pick([90, 100, 110, 120, 80]); return task({ type: "compare", skill: "groessen", prompt: "Setze das richtige Zeichen ein.", expr: `1 kg ? ${a} dag`, choices: ["<", ">", "="], answer: 100 < a ? "<" : 100 > a ? ">" : "=", hint: "1 kg = 100 dag.", explain: `1 kg = 100 dag ${100 < a ? "<" : 100 > a ? ">" : "="} ${a} dag` }); }
+    if (k === "liter") { const n = rnd(2, level === 1 ? 6 : 9); return task({ skill: "groessen", prompt: "Wie viele Liter sind das zusammen?", visual: { kind: "liters", n }, answer: n, unit: "l", hint: "Jede Flasche hat 1 Liter.", explain: `${n} Flaschen = ${n} l` }); }
+    if (k === "literstory") { const a = rnd(6, 10), b = rnd(1, a - 1); return task({ skill: "groessen", prompt: `Im Kübel sind ${a} l Wasser. Kalea gießt ${b} l in die Blumen. Wie viel bleibt im Kübel?`, answer: a - b, unit: "l", hint: "Es wird weniger – rechne minus.", explain: `${a} l - ${b} l = ${a - b} l` }); }
+    const c = pick([2, 5]), n = rnd(2, 6);
+    return task({ skill: "groessen", prompt: `Eine Kanne fasst ${c} l. Wie viele Kannen braucht man für ${c * n} l?`, answer: n, hint: `Wie oft passt ${c} in ${c * n}?`, explain: `${c * n} : ${c} = ${n}` });
+  }
+
+  // ------------------------------------------------------------------ Forschen & Entdecken
+  let MAGIC_TRI = null;
+  function magicTriSolutions() {
+    if (MAGIC_TRI) return MAGIC_TRI;
+    MAGIC_TRI = [];
+    const perm = (arr, cur) => { if (!arr.length) { const v = cur, s1 = v[0] + v[1] + v[2]; if (v[2] + v[3] + v[4] === s1 && v[4] + v[5] + v[0] === s1) MAGIC_TRI.push(v.slice()); return; }
+      arr.forEach((x, i) => perm(arr.slice(0, i).concat(arr.slice(i + 1)), cur.concat([x]))); };
+    perm([1, 2, 3, 4, 5, 6], []);
+    return MAGIC_TRI;
+  }
+  const MAGIC_SQ_BASE = [2, 7, 6, 9, 5, 1, 4, 3, 8];
+  function magicSquare() {
+    let g = MAGIC_SQ_BASE.slice();
+    const rot = (q) => [q[6], q[3], q[0], q[7], q[4], q[1], q[8], q[5], q[2]], mir = (q) => [q[2], q[1], q[0], q[5], q[4], q[3], q[8], q[7], q[6]];
+    for (let i = rnd(0, 3); i > 0; i--) g = rot(g);
+    if (Math.random() < 0.5) g = mir(g);
+    return g;
+  }
+  function sudoku4() {
+    let g = [[1, 2, 3, 4], [3, 4, 1, 2], [2, 1, 4, 3], [4, 3, 2, 1]];
+    const map = shuffle([1, 2, 3, 4]); g = g.map((r) => r.map((x) => map[x - 1]));
+    if (Math.random() < 0.5) [g[0], g[1]] = [g[1], g[0]];
+    if (Math.random() < 0.5) [g[2], g[3]] = [g[3], g[2]];
+    if (Math.random() < 0.5) g = g[0].map((_, c) => g.map((r) => r[c]));
+    if (Math.random() < 0.5) [g[0], g[1], g[2], g[3]] = [g[2], g[3], g[0], g[1]];
+    return g.flat();
+  }
+  function genForschen(level) {
+    const k = level === 1 ? pick(["sudoku", "sudoku", "crypto", "tri"]) : level === 2 ? pick(["sudoku", "magictri", "crypto", "tri", "magicsq"]) : pick(["magicsq", "magictri", "sudoku", "crypto"]);
+    if (k === "sudoku") {
+      const v = sudoku4(), blanksN = level === 1 ? 6 : level === 2 ? 8 : 10;
+      const blank = shuffle(Array.from({ length: 16 }, (_, i) => i)).slice(0, blanksN);
+      return figTask("forschen", "Mini-Sudoku: Setze 1, 2, 3 und 4 ein!", { kind: "sudoku4", cells: v.map((x, i) => ({ v: x, given: !blank.includes(i) })) },
+        "In jeder Zeile, jeder Spalte und jedem dicken Kästchen kommt jede Zahl genau einmal vor.", null);
+    }
+    if (k === "magictri") {
+      const sol = pick(magicTriSolutions()), target = sol[0] + sol[1] + sol[2];
+      const given = level === 2 ? [0, 2, 4] : pick([[0, 2], [0, 4], [2, 4]]);
+      return figTask("forschen", "Zauberdreieck: Setze die Zahlen 1 bis 6 ein!", { kind: "magictri", target, cells: sol.map((x, i) => ({ v: x, given: given.includes(i) })) },
+        "Jede Seite muss dieselbe Summe ergeben. Jede Zahl von 1 bis 6 kommt genau einmal vor.", null);
+    }
+    if (k === "magicsq") {
+      const v = magicSquare(), blanksN = level === 2 ? 3 : 5;
+      const blank = shuffle([0, 1, 2, 3, 5, 6, 7, 8]).slice(0, blanksN);
+      return figTask("forschen", "Zauberquadrat: Jede Reihe ergibt 15!", { kind: "magicsq", cells: v.map((x, i) => ({ v: x, given: !blank.includes(i) })) },
+        "Rechne in jeder Reihe: Was fehlt noch auf 15?", null);
+    }
+    if (k === "tri") {
+      const n = rnd(3, 4), next = ((n + 1) * (n + 2)) / 2;
+      return task({ skill: "forschen", prompt: `Dreieckszahlen: 1, 3, 6${n === 4 ? ", 10" : ""} … Wie viele Punkte hat das nächste Dreieck?`, visual: { kind: "tri", n }, answer: next,
+        hint: "Das nächste Dreieck bekommt unten eine Reihe dazu – mit einem Punkt mehr als vorher.", explain: `${(n * (n + 1)) / 2} + ${n + 1} = ${next}` });
+    }
+    const A = ["🐱", "🐟", "🧶", "🍪"];
+    const a = rnd(2, level === 1 ? 6 : 9), b = rnd(1, level === 1 ? 6 : 9);
+    if (level === 1) return task({ skill: "forschen", prompt: `Kryptogramm: Wie viel ist ${A[1]} wert?`, visual: { kind: "crypto", lines: [`${A[0]} + ${A[0]} = ${2 * a}`, `${A[0]} + ${A[1]} = ${a + b}`] }, answer: b,
+      hint: `Finde zuerst heraus, wie viel ${A[0]} ist.`, explain: `${A[0]} = ${a}, also ${A[1]} = ${a + b} − ${a} = ${b}` });
+    const c = rnd(1, 9);
+    return task({ skill: "forschen", prompt: `Kryptogramm: Wie viel ist ${A[2]} wert?`, visual: { kind: "crypto", lines: [`${A[0]} + ${A[0]} + ${A[0]} = ${3 * a}`, `${A[0]} + ${A[1]} = ${a + b}`, `${A[1]} + ${A[2]} = ${b + c}`] }, answer: c,
+      hint: "Löse Zeile für Zeile von oben nach unten.", explain: `${A[0]} = ${a}, ${A[1]} = ${b}, ${A[2]} = ${c}` });
+  }
+
   const MODULES = [
     { key: "zahlen100", name: "Zahlen bis 100", emoji: "💯", color: "#a78bfa", gen: genZahlen },
+    { key: "hundert",   name: "Hunderterfeld & 1000", emoji: "🔟", color: "#8b5cf6", gen: genHundert },
     { key: "plus",      name: "Plus",           emoji: "➕", color: "#34d399", gen: genPlus },
     { key: "minus",     name: "Minus",          emoji: "➖", color: "#60a5fa", gen: genMinus },
     { key: "ergaenzen", name: "Ergänzen",       emoji: "➰", color: "#f472b6", gen: genErgaenzen },
@@ -624,8 +806,10 @@
     { key: "uhr",       name: "Uhr",            emoji: "🕒", color: "#fb923c", gen: genUhr },
     { key: "zeit",      name: "Zeit & Kalender",emoji: "📅", color: "#2dd4bf", gen: genZeit },
     { key: "laengen",   name: "Längen",         emoji: "📏", color: "#84cc16", gen: genLaengen },
+    { key: "groessen",  name: "Gewicht & Liter", emoji: "⚖️", color: "#0ea5e9", gen: genGroessen },
     { key: "geometrie", name: "Formen & Körper",emoji: "🔷", color: "#6366f1", gen: genGeometrie },
     { key: "muster",    name: "Zahlenfolgen",   emoji: "🔢", color: "#14b8a6", gen: genMuster },
+    { key: "forschen",  name: "Forschen & Entdecken", emoji: "🔍", color: "#ec4899", gen: genForschen },
     { key: "sach",      name: "Rechengeschichten", emoji: "📖", color: "#f87171", gen: genSach },
   ];
 

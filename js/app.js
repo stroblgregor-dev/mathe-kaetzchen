@@ -413,6 +413,11 @@
     if (v && v.kind === "shape") return `<div class="visual">${V.shapeSVG(v.name)}</div>`;
     if (v && v.kind === "body") return `<div class="visual">${V.bodySVG(v.name)}</div>`;
     if (v && v.kind === "sym") return `<div class="visual">${V.symSVG(v.sym, v.k || 0)}</div>`;
+    if (v && v.kind === "weights") return `<div class="visual">${V.weightsHTML(v.values)}</div>`;
+    if (v && v.kind === "liters") return `<div class="visual">${V.litersHTML(v.n)}</div>`;
+    if (v && v.kind === "row") return `<div class="visual">${V.rowHTML(v.n, v.mark)}</div>`;
+    if (v && v.kind === "crypto") return `<div class="visual">${V.cryptoHTML(v.lines)}</div>`;
+    if (v && v.kind === "tri") return `<div class="visual">${V.triDotsSVG(v.n)}</div>`;
     return "";
   }
 
@@ -473,7 +478,8 @@
     } else if (usesKeypad(t)) {
       answer = `<div class="keypad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<button data-act="key" data-k="${d}">${d}</button>`).join("")}
         <button class="del" data-act="key" data-k="del" aria-label="Löschen">⌫</button><button data-act="key" data-k="0">0</button>
-        <button class="ok" data-act="key" data-k="ok" ${g.input ? "" : "disabled"}>✔</button></div>`;
+        ${t.decimal ? `<button class="comma" data-act="key" data-k=",">,</button></div><button class="btn big fig-check" data-act="key" data-k="ok" ${g.input ? "" : "disabled"}>✔ Fertig</button>`
+          : `<button class="ok" data-act="key" data-k="ok" ${g.input ? "" : "disabled"}>✔</button></div>`}`;
     } else {
       const choices = t.type === "compare" ? ["<", "=", ">"] : t.choices;
       const label = { "<": "kleiner", ">": "größer", "=": "gleich" };
@@ -1801,7 +1807,8 @@
           const g = S.game; if (g.locked) break;
           if (d.k === "del") g.input = g.input.slice(0, -1);
           else if (d.k === "ok") { if (g.input) submit(g.input); break; }
-          else if (g.input.length < 4) g.input = (g.input === "0" ? "" : g.input) + d.k;
+          else if (d.k === ",") { if (!g.input.includes(",")) g.input = (g.input || "0") + ","; }
+          else if (g.input.length < (g.tasks[g.idx].decimal ? 6 : 4)) g.input = (g.input === "0" ? "" : g.input) + d.k;
           sfx.tap(); render(); break;
         }
         case "choice": submit(d.c); break;
@@ -1932,7 +1939,8 @@
     }
     if (!usesKeypad(t)) return;
     const g = S.game; if (g.locked) return;
-    if (/^\d$/.test(ev.key) && g.input.length < 4) { g.input = (g.input === "0" ? "" : g.input) + ev.key; render(); }
+    if (/^\d$/.test(ev.key) && g.input.length < (t.decimal ? 6 : 4)) { g.input = (g.input === "0" ? "" : g.input) + ev.key; render(); }
+    else if ((ev.key === "," || ev.key === ".") && t.decimal && !g.input.includes(",")) { g.input = (g.input || "0") + ","; render(); }
     else if (ev.key === "Backspace") { g.input = g.input.slice(0, -1); render(); }
     else if (ev.key === "Enter" && g.input) submit(g.input);
   });

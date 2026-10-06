@@ -577,3 +577,50 @@ h1, h2, h3 { margin: 0; font-weight: 700; }
 .pack-row .pinfo { flex: 1 1 55%; min-width: 150px; }
 .pack-row .row-actions { margin-left: auto; }
 .pack-detail h2 .btn { vertical-align: middle; margin-left: 6px; }
+
+/* ---------- Rechengitter, Teilen mit Rest, Hunderterfeld, Zauberrätsel, Sudoku ---------- */
+.grid-tbl { border-collapse: separate; border-spacing: 4px; margin: 0 auto; }
+.grid-tbl th { min-width: 44px; height: 40px; font-size: 1.25rem; font-weight: 800; color: #6d28d9; background: #f5f3ff; border-radius: 10px; }
+.grid-tbl th.op { background: #ede9fe; color: var(--ink); }
+.grid-tbl td .fcell { min-width: 52px; }
+.rest { font-size: 1.1rem; color: var(--muted); font-weight: 700; }
+.fig-hfield { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.hf-row { display: flex; gap: 4px; }
+.fcell.hf { width: 62px; height: 52px; border-radius: 6px; }
+.fcell.hf.given { background: #fef9c3; border: 2px solid #eab308; }
+.fig-magictri { position: relative; width: min(300px, 82vw); aspect-ratio: 30 / 30; }
+.fig-magictri .tri-svg { height: 92%; }
+.fig-magictri .tpos { position: absolute; transform: translate(-50%, -50%); }
+.mt0 { left: 50%; top: 8%; } .mt1 { left: 29%; top: 46%; } .mt2 { left: 8%; top: 86%; } .mt3 { left: 50%; top: 86%; } .mt4 { left: 92%; top: 86%; } .mt5 { left: 71%; top: 46%; }
+.fcell.round { border-radius: 50%; width: 52px; height: 52px; min-width: 52px; }
+.fcell.round.given { background: #fde68a; border: 2px solid #d97706; }
+.magic-goal { position: absolute; left: 0; right: 0; bottom: -8px; text-align: center; font-size: .95rem; color: var(--muted); }
+.fig-magicsq { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.fig-magicsq .magic-goal { position: static; }
+.ms-grid { display: grid; grid-template-columns: repeat(3, 60px); gap: 4px; }
+.fcell.sq { width: 60px; height: 56px; border-radius: 8px; }
+.fcell.sq.given { background: #e0f2fe; border: 2px solid #38bdf8; }
+.su-grid { display: grid; grid-template-columns: repeat(4, 58px); border: 3px solid #4a3f5c; border-radius: 10px; overflow: hidden; margin: 0 auto; width: max-content; }
+.fcell.su { width: 58px; height: 56px; border-radius: 0; border: 1px solid #d6cbbd; }
+.fcell.su.given { background: #fff7ed; }
+.fcell.su.su-c1 { border-right: 3px solid #4a3f5c; } .fcell.su.su-r1 { border-bottom: 3px solid #4a3f5c; }
+.fcell.su.blank { border-style: solid; border-color: #d6cbbd; }
+.fcell.su.blank.active { background: #fff1e5; box-shadow: inset 0 0 0 3px var(--accent); }
+.fcell.su.blank.wrong { background: #fee2e2; } .fcell.su.blank.right { background: #dcfce7; } .fcell.su.blank.reveal { background: #f5f3ff; }
+.fcell.su.su-c1.blank, .fcell.su.su-c1.given { border-right: 3px solid #4a3f5c; } .fcell.su.su-r1.blank, .fcell.su.su-r1.given { border-bottom: 3px solid #4a3f5c; }
+/* ---------- weitere Bilder ---------- */
+.vis-weight { height: 60px; }
+.vis-bottle { width: 28px; height: 64px; }
+.vis-row { display: flex; gap: 4px; align-items: flex-end; font-size: 1.7rem; flex-wrap: wrap; justify-content: center; }
+.vis-row span { display: flex; flex-direction: column; align-items: center; line-height: 1; min-width: 34px; }
+.vis-row span.mark b { filter: drop-shadow(0 0 4px #f97316); }
+.vis-row .dir { font-size: .9rem; color: var(--muted); align-self: center; }
+.vis-crypto { font-size: 1.7rem; font-weight: 700; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.vis-tri { width: 100%; max-width: 320px; height: auto; }
+.keypad .comma { background: #ede9fe; color: #6d28d9; box-shadow: 0 5px 0 #c4b5fd; font-size: 2.2rem; }
+.fcell.su.given { background: #efe2cf; }
+.fcell.su.blank:not(.active):not(.wrong):not(.right):not(.reveal) { background: #fff; }
+.fig-magictri { margin-bottom: 30px; }
+.fig-magictri .magic-goal { bottom: -26px; }
+.vis-weight { width: 66px; height: 72px; }
+.vis-weights { align-items: flex-end; }

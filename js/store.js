@@ -8,7 +8,7 @@
   const MAX_ATTEMPTS = 6000;
   const DEFAULT_SETTINGS = {
     pin: DEFAULT_PIN, daily_goal: 20, session_len: 10, tts_auto: false,
-    modules: ["zahlen100", "plus", "minus", "ergaenzen", "raetsel", "doppelt", "einmaleins", "geld", "uhr", "zeit", "laengen", "geometrie", "muster", "sach"],
+    modules: ["zahlen100", "hundert", "plus", "minus", "ergaenzen", "raetsel", "doppelt", "einmaleins", "geld", "uhr", "zeit", "laengen", "groessen", "geometrie", "muster", "forschen", "sach"],
     levels: {}, api_key: "", model: "claude-opus-5-5",
   };
 
@@ -23,7 +23,7 @@
     mem = mem || {};
     mem.settings = Object.assign(clone(DEFAULT_SETTINGS), mem.settings || {});
     // neue Bereiche (z.B. nach einem Update) automatisch einblenden, abgewählte bleiben aus
-    const ALL_MODULES = ["zahlen100", "plus", "minus", "ergaenzen", "raetsel", "doppelt", "einmaleins", "geld", "uhr", "zeit", "laengen", "geometrie", "muster", "sach"];
+    const ALL_MODULES = ["zahlen100", "hundert", "plus", "minus", "ergaenzen", "raetsel", "doppelt", "einmaleins", "geld", "uhr", "zeit", "laengen", "groessen", "geometrie", "muster", "forschen", "sach"];
     const known = mem.settings.modulesKnown || ["zahlen100", "plus", "minus", "ergaenzen", "geld", "uhr", "zeit", "sach"];
     ALL_MODULES.forEach((k) => { if (!known.includes(k) && !mem.settings.modules.includes(k)) mem.settings.modules.push(k); });
     mem.settings.modulesKnown = ALL_MODULES;

@@ -56,13 +56,13 @@
   function numberlineSVG(min, max, marker) {
     const span = max - min;
     const W = 320, x0 = 18, x1 = W - 18;
-    const step = span <= 20 ? 1 : (span <= 50 ? 5 : 5);
-    const labelEvery = span <= 10 ? 1 : (span <= 20 ? 5 : 10);
+    const step = span <= 20 ? 1 : span <= 100 ? 5 : span / 20;
+    const labelEvery = span <= 10 ? 1 : span <= 20 ? 5 : span <= 100 ? 10 : span / 5;
     const parts = [];
     for (let v = min; v <= max; v += step) {
       const x = x0 + (v - min) / span * (x1 - x0);
       const big = (v - min) % labelEvery === 0;
-      const mid = span === 100 && (v - min) % 10 === 0;
+      const mid = (span === 100 && (v - min) % 10 === 0) || (span > 100 && (v - min) % (span / 10) === 0);
       parts.push(`<line x1="${x.toFixed(1)}" y1="${big || mid ? 52 : 57}" x2="${x.toFixed(1)}" y2="${big || mid ? 76 : 71}" stroke="#4a3f5c" stroke-width="${big ? 2.6 : 1.4}"/>`);
       if (big && v !== marker) parts.push(`<text x="${x.toFixed(1)}" y="96" text-anchor="middle" font-size="15" font-weight="700" fill="#3b3150">${v}</text>`);
     }
@@ -155,5 +155,42 @@
     return `<svg class="vis-shape" viewBox="0 0 120 120" role="img" aria-label="Figur">${f}<line x1="60" y1="6" x2="60" y2="114" stroke="#1f2937" stroke-width="2" stroke-dasharray="6 5"/></svg>`;
   }
 
-  window.Visuals = { clockSVG, moneyHTML, numberlineSVG, blocksSVG, coinSVG, dotsSVG, rulerSVG, shapeSVG, bodySVG, symSVG };
+  // Gewichte (Werte in dag): 1 kg, 50 dag, 20 dag, 10 dag, 5 dag, 2 dag, 1 dag
+  function weightsHTML(values) {
+    const one = (v) => {
+      const kg = v >= 100, label = kg ? `${v / 100} kg` : `${v} dag`;
+      const h = kg ? 60 : v >= 50 ? 52 : v >= 20 ? 46 : v >= 10 ? 40 : 34, top = 74 - h;
+      return `<svg class="vis-weight" viewBox="0 0 70 76"><path d="M26 ${top + 6} Q35 ${top - 6} 44 ${top + 6}" stroke="#4b5563" stroke-width="4" fill="none"/>
+        <polygon points="14,${top + 8} 56,${top + 8} 66,74 4,74" fill="${kg ? "#374151" : "#6b7280"}"/>
+        <text x="35" y="${top + 8 + (66 - top) / 2 + 5}" text-anchor="middle" font-size="${kg ? 16 : 14}" font-weight="800" fill="#fff">${label}</text></svg>`;
+    };
+    return `<div class="vis-money vis-weights">${values.slice().sort((a, b) => b - a).map(one).join("")}</div>`;
+  }
+
+  // Liter: n volle Literflaschen
+  function litersHTML(n) {
+    const b = `<svg class="vis-bottle" viewBox="0 0 30 70"><rect x="11" y="2" width="8" height="10" fill="#93c5fd"/><path d="M8 14 L22 14 L26 24 L26 66 L4 66 L4 24 Z" fill="#bfdbfe" stroke="#1d4ed8" stroke-width="2"/>
+      <rect x="6" y="30" width="18" height="34" fill="#60a5fa"/><text x="15" y="52" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">1 l</text></svg>`;
+    return `<div class="vis-money">${Array.from({ length: n }, () => b).join("")}</div>`;
+  }
+
+  // Reihe von Kätzchen (Ordnungszahlen), eines mit Hut
+  function rowHTML(n, mark) {
+    return `<div class="vis-row">${Array.from({ length: n }, (_, i) => `<span class="${i === mark ? "mark" : ""}">${i === mark ? "🎩" : ""}<b>🐱</b></span>`).join("")}</div>`;
+  }
+
+  // Kryptogramm: Zeilen mit Symbolen
+  function cryptoHTML(lines) { return `<div class="vis-crypto">${lines.map((l) => `<div>${l}</div>`).join("")}</div>`; }
+
+  // Dreieckszahlen: Punktdreiecke 1..n
+  function triDotsSVG(n) {
+    const parts = []; let x0 = 6;
+    for (let k = 1; k <= n; k++) {
+      for (let r = 0; r < k; r++) for (let c = 0; c <= r; c++) parts.push(`<circle cx="${x0 + (k - 1 - r) * 6 + c * 12 + 6}" cy="${10 + r * 11}" r="4.5" fill="${["#f472b6", "#60a5fa", "#fbbf24", "#34d399", "#a78bfa"][k - 1]}"/>`);
+      x0 += k * 12 + 10;
+    }
+    return `<svg class="vis-tri" viewBox="0 0 ${x0} ${14 + n * 11}" role="img" aria-label="Dreieckszahlen">${parts.join("")}</svg>`;
+  }
+
+  window.Visuals = { clockSVG, moneyHTML, numberlineSVG, blocksSVG, coinSVG, dotsSVG, rulerSVG, shapeSVG, bodySVG, symSVG, weightsHTML, litersHTML, rowHTML, cryptoHTML, triDotsSVG };
 })();
