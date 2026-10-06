@@ -85,6 +85,19 @@
     { id: "starglasses", slot: "face", name: "Sternchen-Brille",  surprise: true, emoji: "🤩" },
     { id: "astronaut", slot: "head",  name: "Astronauten-Helm",  surprise: true, emoji: "🚀" },
     { id: "heartballoon", slot: "extra", name: "Herz-Ballon",    surprise: true, emoji: "💖" },
+    // Saison – nur während des Events im Laden
+    { id: "witchhat",  slot: "head",  name: "Hexenhut",          price: 16, emoji: "🧙‍♀️", event: "halloween" },
+    { id: "ghostcape", slot: "back",  name: "Gespenster-Umhang", price: 18, emoji: "👻", event: "halloween" },
+    { id: "pumpkin",   slot: "extra", name: "Kürbis-Laterne",    price: 14, emoji: "🎃", event: "halloween" },
+    { id: "santahat",  slot: "head",  name: "Weihnachtsmütze",   price: 16, emoji: "🎅", event: "advent" },
+    { id: "antlers",   slot: "head",  name: "Rentier-Geweih",    price: 18, emoji: "🦌", event: "advent" },
+    { id: "xmasscarf", slot: "neck",  name: "Weihnachtsschal",   price: 14, emoji: "🧣", event: "advent" },
+    { id: "mask",      slot: "face",  name: "Faschingsmaske",    price: 14, emoji: "🎭", event: "fasching" },
+    { id: "confettihat", slot: "head", name: "Konfetti-Hut",     price: 14, emoji: "🎊", event: "fasching" },
+    { id: "bunnyears", slot: "head",  name: "Hasenohren",        price: 16, emoji: "🐰", event: "ostern" },
+    { id: "easterbasket", slot: "extra", name: "Osterkörbchen",  price: 14, emoji: "🧺", event: "ostern" },
+    { id: "sunhat",    slot: "head",  name: "Sonnenhut",         price: 14, emoji: "👒", event: "sommer" },
+    { id: "swimring",  slot: "body",  name: "Schwimmreifen",     price: 16, emoji: "🛟", event: "sommer" },
   ];
 
   let uid = 0;
@@ -219,6 +232,32 @@
       case "mustache": return { front: `<path d="M100 112 C 90 104, 72 106, 66 120 C 78 114, 90 120, 100 115 C 110 120, 122 114, 134 120 C 128 106, 110 104, 100 112 Z" fill="#3b2a1a"/>` };
       case "clownnose": return { front: `<circle cx="100" cy="106" r="10" fill="#ef4444"/><circle cx="97" cy="103" r="3" fill="#fff" opacity=".7"/>` };
       case "eyepatch": return { front: `<path d="M48 70 L150 52" stroke="#111827" stroke-width="3"/><ellipse cx="76" cy="90" rx="16" ry="17" fill="#111827"/>` };
+      case "witchhat": return { front: `<polygon points="106,-20 76,38 126,38" fill="#1f2937"/><ellipse cx="100" cy="40" rx="42" ry="8" fill="#111827"/>
+          <rect x="80" y="27" width="42" height="7" fill="#a855f7"/>${star5(102, 10, 5, "#fde047")}` };
+      case "ghostcape": return CAPE("#e2e8f0", `<g fill="#475569"><circle cx="48" cy="182" r="2.5"/><circle cx="56" cy="182" r="2.5"/><circle cx="144" cy="182" r="2.5"/><circle cx="152" cy="182" r="2.5"/></g>`);
+      case "pumpkin": return { front: `<g transform="translate(172 190)"><ellipse rx="21" ry="16" fill="#f97316" stroke="#c2410c" stroke-width="2"/>
+          <path d="M-8 -14 Q-10 0 -8 14 M8 -14 Q10 0 8 14" stroke="#c2410c" stroke-width="2" fill="none"/><rect x="-2" y="-22" width="4" height="8" fill="#15803d"/>
+          <polygon points="-11,-4 -5,-4 -8,-9" fill="#fde047"/><polygon points="5,-4 11,-4 8,-9" fill="#fde047"/><path d="M-9 4 L-5 7 L-1 4 L3 7 L7 4 L9 6 Q0 12 -9 6 Z" fill="#fde047"/></g>` };
+      case "santahat": return { front: `<path d="M62 42 Q92 -16 146 4 L132 42 Z" fill="#dc2626"/><rect x="56" y="33" width="88" height="13" rx="6.5" fill="#fff"/>
+          <circle cx="147" cy="6" r="9" fill="#fff"/>` };
+      case "antlers": return { front: `<g stroke="#92400e" stroke-width="6" stroke-linecap="round" fill="none">
+          <path d="M76 42 L64 4"/><path d="M68 18 L54 12"/><path d="M66 8 L74 -6"/><path d="M124 42 L136 4"/><path d="M132 18 L146 12"/><path d="M134 8 L126 -6"/></g>` };
+      case "xmasscarf": return { front: `<path d="M58 128 Q100 148 142 128 L144 140 Q100 162 56 140 Z" fill="#dc2626"/>
+          <path d="M120 142 L132 176 L118 178 L110 146 Z" fill="#b91c1c"/><path d="M70 134 L74 146 M86 139 L88 151 M102 141 L102 153 M118 139 L116 151" stroke="#fff" stroke-width="4"/>` };
+      case "mask": return { front: `<path fill-rule="evenodd" d="M48 84 Q74 64 100 80 Q126 64 152 84 Q150 110 124 106 Q110 104 100 96 Q90 104 76 106 Q50 110 48 84 Z M63 90 a13 11 0 1 0 26 0 a13 11 0 1 0 -26 0 Z M111 90 a13 11 0 1 0 26 0 a13 11 0 1 0 -26 0 Z"
+          fill="#a855f7" stroke="#facc15" stroke-width="3"/><path d="M150 80 Q170 50 162 30" stroke="#ec4899" stroke-width="5" fill="none" stroke-linecap="round"/>` };
+      case "confettihat": return { front: `<polygon points="100,-8 80,40 120,40" fill="#fde047"/>${[[92, 30, "#ef4444"], [104, 20, "#3b82f6"], [97, 10, "#22c55e"], [108, 33, "#a855f7"], [88, 22, "#ec4899"]].map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="3" fill="${c}"/>`).join("")}
+          <circle cx="100" cy="-8" r="7" fill="#ef4444"/>` };
+      case "bunnyears": return { front: `<ellipse cx="80" cy="6" rx="11" ry="30" fill="#fff" stroke="#e5e7eb" stroke-width="2" transform="rotate(-12 80 6)"/><ellipse cx="80" cy="8" rx="5" ry="21" fill="#f9a8d4" transform="rotate(-12 80 8)"/>
+          <ellipse cx="120" cy="6" rx="11" ry="30" fill="#fff" stroke="#e5e7eb" stroke-width="2" transform="rotate(12 120 6)"/><ellipse cx="120" cy="8" rx="5" ry="21" fill="#f9a8d4" transform="rotate(12 120 8)"/>
+          <path d="M60 40 Q100 22 140 40" stroke="#f472b6" stroke-width="6" fill="none"/>` };
+      case "easterbasket": return { front: `<g transform="translate(170 190)"><path d="M-6 -8 Q0 -36 18 -8" stroke="#92400e" stroke-width="3" fill="none" transform="translate(-6 0)"/>
+          <ellipse cx="-8" cy="-9" rx="6" ry="8" fill="#60a5fa"/><ellipse cx="4" cy="-11" rx="6" ry="8" fill="#f472b6"/><ellipse cx="13" cy="-8" rx="5" ry="7" fill="#facc15"/>
+          <path d="M-20 -6 L20 -6 L15 14 L-15 14 Z" fill="#d97706" stroke="#92400e" stroke-width="2"/><path d="M-17 2 L17 2" stroke="#92400e" stroke-width="2"/></g>` };
+      case "sunhat": return { front: `<ellipse cx="100" cy="38" rx="60" ry="12" fill="#fde68a" stroke="#d97706" stroke-width="2"/>
+          <path d="M72 38 Q74 6 100 6 Q126 6 128 38 Z" fill="#fde68a" stroke="#d97706" stroke-width="2"/><rect x="73" y="25" width="54" height="8" fill="#f472b6"/>` };
+      case "swimring": return { body: `<ellipse cx="100" cy="172" rx="56" ry="15" fill="none" stroke="#fb7185" stroke-width="14"/>
+          <ellipse cx="100" cy="172" rx="56" ry="15" fill="none" stroke="#fff" stroke-width="14" stroke-dasharray="14 30"/>` };
       case "scarf": return { front: `<path d="M58 128 Q100 148 142 128 L144 140 Q100 162 56 140 Z" fill="#3b82f6"/>
           <path d="M120 142 L132 176 L118 178 L110 146 Z" fill="#2563eb"/><path d="M70 134 L74 146 M86 139 L88 151 M102 141 L102 153 M118 139 L116 151" stroke="#93c5fd" stroke-width="3"/>` };
       case "bowtie": return { front: `<polygon points="100,146 78,134 78,158" fill="#dc2626"/><polygon points="100,146 122,134 122,158" fill="#dc2626"/><circle cx="100" cy="146" r="6" fill="#991b1b"/>` };
@@ -304,6 +343,9 @@
       <g stroke="#2b2233" stroke-width="1.6" opacity="0.45" stroke-linecap="round">
         <path d="M74 110 L40 104"/><path d="M74 115 L40 120"/><path d="M126 110 L160 104"/><path d="M126 115 L160 120"/></g>
       ${mood === "sleep" ? `<text x="150" y="40" font-size="22" font-weight="700" fill="#8b80a8">z</text><text x="166" y="22" font-size="28" font-weight="700" fill="#8b80a8">Z</text>` : ""}
+      ${opts.messy ? `<g stroke="${c.dark}" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.9">
+        <path d="M70 40 L64 26 L76 32 L72 18"/><path d="M128 40 L136 28 L124 32 L130 18"/><path d="M48 150 L36 146 L46 140"/><path d="M152 150 L164 146 L154 140"/>
+        <path d="M96 38 L100 26 L104 38"/><path d="M60 182 L48 186 L56 176"/><path d="M140 182 L152 186 L144 176"/></g>` : ""}
       ${layer("front")}
     </svg>`;
   }

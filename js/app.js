@@ -6,7 +6,7 @@
   const MILESTONES = [25, 50, 100, 150, 200, 300, 400, 500, 750, 1000];
   const V = window.Visuals;
   const GEN = window.Generators;
-  const BASKET_PRICE = 15;
+  const BASKET_PRICE = 80;     // Adoption eines neuen Kätzchens
   const FIX_FISH = 3;          // Belohnung pro ausgebessertem Fehler
   const FIX_ALL_BONUS = 5;     // Bonus, wenn die Werkstatt leer ist
   const $app = document.getElementById("app");
@@ -21,8 +21,10 @@
   // ------------------------------------------------------------------ Hilfen
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const today = () => isoDay(new Date());
-  const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return isoDay(d); };
+  // Testhilfe: localStorage "mk_now" (z.B. "2026-10-20") simuliert ein anderes Datum
+  const now = () => { let f = null; try { f = localStorage.getItem("mk_now"); } catch (e) { /* egal */ } return f ? new Date(f + "T12:00:00") : new Date(); };
+  const today = () => isoDay(now());
+  const yesterday = () => { const d = now(); d.setDate(d.getDate() - 1); return isoDay(d); };
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
 
@@ -54,6 +56,7 @@
     if (S.muted) return;
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
       let t = actx.currentTime;
       freqs.forEach((f) => {
         const o = actx.createOscillator(), g = actx.createGain();
@@ -72,6 +75,22 @@
     purr: () => tone([70, 75, 70, 78, 72], 0.18, "sawtooth", 0.12),
     tap: () => tone([520], 0.06, "triangle"),
   };
+  // Miau: Sägezahn mit Tonhöhen- und Klangverlauf (Mund öffnet/schließt) + leichtes Vibrato
+  function meow(pitch) {
+    if (S.muted) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      const t = actx.currentTime, k = pitch || 1;
+      const o = actx.createOscillator(), f = actx.createBiquadFilter(), g = actx.createGain(), lfo = actx.createOscillator(), lg = actx.createGain();
+      o.type = "sawtooth"; f.type = "bandpass"; f.Q.value = 2.2;
+      o.frequency.setValueAtTime(470 * k, t); o.frequency.linearRampToValueAtTime(840 * k, t + 0.18); o.frequency.linearRampToValueAtTime(560 * k, t + 0.62);
+      f.frequency.setValueAtTime(650, t); f.frequency.linearRampToValueAtTime(1800, t + 0.2); f.frequency.linearRampToValueAtTime(800, t + 0.62);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.4, t + 0.07); g.gain.setValueAtTime(0.32, t + 0.42); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.68);
+      lfo.frequency.value = 6.5; lg.gain.value = 14; lfo.connect(lg).connect(o.frequency);
+      o.connect(f).connect(g).connect(actx.destination); o.start(t); lfo.start(t); o.stop(t + 0.72); lfo.stop(t + 0.72);
+    } catch (e) { /* kein Audio */ }
+  }
 
   let voice = null;
   function pickVoice() {
@@ -95,7 +114,7 @@
     if (!("speechSynthesis" in window) || S.muted) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = voice ? voice.lang : "de-DE"; if (voice) u.voice = voice; u.rate = 0.9; u.pitch = 1.1;
+    u.lang = "de-DE"; u.rate = 0.95;   // Standardstimme des Geräts – keine Spezial-/Spaßstimmen
     speechSynthesis.speak(u);
   }
 
@@ -107,10 +126,27 @@
     s.retry = s.retry || []; s.streak = s.streak || 0; s.best_streak = s.best_streak || 0; s.total_correct = s.total_correct || 0;
     s.packstars = s.packstars || 0; s.fixed_total = s.fixed_total || 0; s.packStats = s.packStats || {};
     s.giftQueue = s.giftQueue || []; s.milestones = s.milestones || []; s.rounds = s.rounds || 0; s.boost = s.boost || 0;
+    s.food = s.food ?? 0; s.treats = s.treats || 0; s.playDays = s.playDays || []; s.achieved = s.achieved || [];
+    s.perfectL3 = s.perfectL3 || 0; s.grade1 = s.grade1 || 0; s.careWeeks = s.careWeeks || 0; s.careStreak = s.careStreak || 0;
     s.cats.forEach((c) => {
       if (typeof c.acc === "string") { const a = ACCESSORIES.find((x) => x.id === c.acc); c.acc = a ? { [a.slot]: a.id } : {}; }
       else if (!c.acc) c.acc = {};
+      c.items = c.items || [];
+      if (c.fed === undefined) c.fed = today();
+      if (c.brushed === undefined) c.brushed = today();
+      if (c.hearts === undefined) c.hearts = 3;
+      if (c.growth === undefined) c.growth = 0;
     });
+    // v2: Gekaufte Teile gehören einzelnen Kätzchen (vorher: allen gemeinsam)
+    if (!s.v2) {
+      const fav = s.cats.find((c) => c.id === s.fav) || s.cats[0];
+      (s.accessories || []).forEach((id) => {
+        const wearers = s.cats.filter((c) => Object.values(c.acc).includes(id));
+        (wearers.length ? wearers : fav ? [fav] : []).forEach((c) => { if (!c.items.includes(id)) c.items.push(id); });
+      });
+      s.accessories = []; if (s.food < 2) s.food = 2; s.joyCheck = today(); s.v2 = true;
+    }
+    s.cats.forEach((c) => Object.keys(c.acc).forEach((sl) => { if (!c.items.includes(c.acc[sl])) delete c.acc[sl]; }));
     return p;
   }
   let saveTimer = null;
@@ -130,7 +166,7 @@
   function favCat() {
     const s = st();
     const own = s.cats.find((c) => c.id === s.fav) || s.cats[0];
-    return own ? { def: Cats.byId(own.id), acc: own.acc } : { def: CATS[0], acc: null };
+    return own ? { def: Cats.byId(own.id), acc: own.acc, cat: own } : { def: CATS[0], acc: null, cat: null };
   }
   function moduleLevel(key) { return st().levels[key] || 1; }   // empfohlenes Level
   const LEVEL_FISH = { 1: 1, 2: 2, 3: 3 };                        // Fischlein pro richtiger Antwort
@@ -229,7 +265,7 @@
     const name = CHILD_NAME;
     const starter = document.querySelector(".starter-cat.on")?.dataset.id || "mimi";
     const p = ensureState(await api("/api/profiles", { json: { name } }));
-    p.state.cats = [{ id: starter, acc: {} }]; p.state.fav = starter;
+    p.state.cats = [newCat(starter)]; p.state.fav = starter;
     S.profile = p;
     await api(`/api/profiles/${p.id}/state`, { json: { state: p.state } });
     store("mk_profile", String(p.id));
@@ -242,6 +278,16 @@
   // ------------------------------------------------------------------ Startseite
   function greeting() {
     const s = st(), n = S.profile.name, goal = S.boot.settings.daily_goal, done = S.profile.today_correct;
+    const fcat = favCat().cat;
+    if (fcat) {
+      const nd = needs(fcat), nm = Cats.byId(fcat.id).name;
+      if (nd.state === "exhausted") return `${nm} ist ganz erschöpft vor Hunger… Bitte füttern! 🍽️`;
+      if (nd.hunger >= 1) return `Miau, ${n}! Ich habe Hunger! 🍽️ ${s.food ? "Fütterst du mich?" : "Verdienen wir uns Fischlein für Futter?"}`;
+      if (fcat.hearts <= 1) return `Ich bin traurig… Rechnest du eine Runde mit mir? Das macht mich froh! ❤️`;
+      if (nd.messy) return `Mein Fell ist ganz zerzaust – bürstest du mich? 🪮`;
+    }
+    const ev = currentEvent();
+    if (ev && Math.random() < 0.5) return ev.greeting;
     if (done >= goal) return `Juhu, ${n}! Tagesziel geschafft! ⭐ Du bist ein Mathe-Profi!`;
     if (done === 0) return pick([`Hallo ${n}! Ich bin noch ganz müde… Rechnest du mit mir?`, `Miau, ${n}! Hast du heute schon geübt?`, `Hallo ${n}! Mein Bauch knurrt – verdienen wir uns Fischlein?`]);
     if (s.fish >= BASKET_PRICE && commonLeft() > 0) return `Du hast ${s.fish} Fischlein! Schau mal in den Laden – ein Kätzchen wartet! 🧺`;
@@ -249,7 +295,7 @@
   }
 
   function renderHome() {
-    checkDailyGift();
+    applyDecay(); checkDailyGift();
     const s = st(), set = S.boot.settings, goal = set.daily_goal, done = Math.min(S.profile.today_correct, goal);
     const fc = favCat();
     const mood = S.profile.today_correct === 0 ? "sleep" : (S.profile.today_correct >= goal ? "joy" : "happy");
@@ -258,13 +304,15 @@
     const mods = GEN.MODULES.filter((m) => set.modules.includes(m.key));
     $app.innerHTML = `${topbar()}<main class="screen home">
       <section class="hero">
-        <div class="hero-cat" data-act="petfav">${catSVG(fc.def, { mood, acc: fc.acc, cls: "cat-lg " + (mood === "sleep" ? "" : "bob") })}</div>
+        <div class="hero-cat" data-act="petfav">${fc.cat ? catImg(fc.cat, { cls: "cat-lg " + (needs(fc.cat).state === "exhausted" ? "" : "bob") }) : catSVG(fc.def, { mood, cls: "cat-lg" })}</div>
         <div class="bubble">${esc(greeting())}</div>
       </section>
       <section class="goal">
         <div class="goal-label"><span>Tagesziel</span><b>${done} / ${goal} 🐾</b></div>
         <div class="goal-bar"><i style="width:${Math.round(done / goal * 100)}%"></i></div>
       </section>
+      ${(() => { const ev = currentEvent(); return ev ? `<section class="event-banner">${ev.emoji} <b>${ev.name}</b> – im Laden gibt es jetzt besondere Sachen!</section>` : ""; })()}
+      ${careCard()}
       ${giftBanner()}
       ${packs.length ? `<h2 class="sec">📚 Von der Schule &amp; neu für dich</h2><div class="packs">${packs.map((p) => `
         <button class="pack-card" data-act="packmenu" data-id="${p.id}"><span class="pe">${esc(p.emoji || "⭐")}</span>
@@ -545,6 +593,8 @@
         else if (r < 0.5 && played <= rec && played > 1) s.levels[k] = played - 1;
       });
     }
+    const joy = joyAfterRound(rate);
+    if (g.mode.level === 3 && n >= 5 && firsts === n) s.perfectL3++;
     if (g.boost) s.boost = Math.max(0, (s.boost || 0) - 1);
     if (g.mode.kind === "pack" && stars === 3) s.packstars++;
     if (g.mode.kind === "pack") {
@@ -553,10 +603,10 @@
       if (!ps.best || firsts / n > ps.best.c / ps.best.n) ps.best = { c: firsts, n };
       ps.history.push({ d: today(), m: "ueben", c: firsts, n }); if (ps.history.length > 30) ps.history.shift();
     }
-    const giftsNew = roundGifts();
+    const giftsNew = roundGifts() + checkAchievements();
     const unlocked = checkUnlocks(true);
     saveState();
-    S.result = { giftsNew, stars, fish: g.fish, bonus, goalBonus, fixAllBonus, fixed: g.fixed, openLeft: s.retry.length, firsts, n, levelMsgs, unlocked, mode: g.mode };
+    S.result = { joy, giftsNew, stars, fish: g.fish, bonus, goalBonus, fixAllBonus, fixed: g.fixed, openLeft: s.retry.length, firsts, n, levelMsgs, unlocked, mode: g.mode };
     S.game = null; S.view = "result"; render();
     sfx.fanfare(); confetti();
   }
@@ -573,11 +623,12 @@
     ps.tests++;
     if (!prev || grade < prev.grade || (grade === prev.grade && c / n > prev.c / prev.n)) ps.bestTest = { c, n, grade };
     ps.history.push({ d: today(), m: "test", c, n, grade }); if (ps.history.length > 30) ps.history.shift();
-    if (grade === 1) s.packstars++;
-    const giftsNew = roundGifts();
+    if (grade === 1) { s.packstars++; s.grade1++; }
+    const joy = joyAfterRound(c / n);
+    const giftsNew = roundGifts() + checkAchievements();
     const unlocked = checkUnlocks(true);
     saveState();
-    S.result = { giftsNew, test: true, c, n, grade, fish, gradeBonus, goalBonus, improved: !!prev && grade < prev.grade, prevGrade: prev && prev.grade,
+    S.result = { joy, giftsNew, test: true, c, n, grade, fish, gradeBonus, goalBonus, improved: !!prev && grade < prev.grade, prevGrade: prev && prev.grade,
       wrong: g.testLog.filter((x) => !x.ok), unlocked, mode: g.mode, levelMsgs: [] };
     S.game = null; S.view = "result"; render();
     if (grade <= 3) { sfx.fanfare(); confetti(); }
@@ -593,6 +644,8 @@
       ${r.improved ? `<div class="levelup">⬆️ Besser als beim letzten Bestwert (Note ${r.prevGrade})!</div>` : ""}
       ${catSVG(fc.def, { mood: r.grade <= 3 ? "joy" : "happy", acc: fc.acc, cls: "cat-md " + (r.grade <= 3 ? "jump" : "") })}
       <div class="loot"><span>🐟 +${r.fish}</span>${r.gradeBonus ? `<span>📝 Noten-Bonus +${r.gradeBonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}</div>
+      ${r.joy ? `<div class="levelup joy">❤️ +${r.joy} für alle Kätzchen</div>` : ""}
+      ${careReminder()}
       ${giftButton(r)}
       ${r.wrong.length ? `<div class="review"><h3>Das schauen wir uns nochmal an:</h3>
         <ul>${r.wrong.map((x) => `<li><span>${esc(label(x.t))}</span><span>du: <s>${esc(x.given)}</s> · richtig: <b>${esc(x.t.answer)}${x.t.unit && !["clock"].includes(x.t.type) ? " " + esc(x.t.unit) : ""}</b></span></li>`).join("")}</ul>
@@ -616,6 +669,8 @@
       <p class="big">${r.firsts} von ${r.n} gleich richtig</p>
       ${r.mode.level ? `<p class="muted">Level ${r.mode.level} ${"🐾".repeat(r.mode.level)} · ${LEVEL_FISH[r.mode.level]} 🐟 pro Aufgabe</p>` : ""}
       <div class="loot"><span>🐟 +${r.fish}</span>${r.bonus ? `<span>⭐ Sterne-Bonus +${r.bonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}${r.fixAllBonus ? `<span>🧹 Werkstatt leer +${r.fixAllBonus}</span>` : ""}</div>
+      ${r.joy ? `<div class="levelup joy">❤️ +${r.joy} für alle Kätzchen</div>` : ""}
+      ${careReminder()}
       ${r.mode.kind === "retry" && r.openLeft ? `<p class="muted">Noch ${r.openLeft} in der Fehler-Werkstatt.</p>` : ""}
       ${r.levelMsgs.map((m) => `<div class="levelup">⬆️ ${esc(m)}</div>`).join("")}
       ${giftButton(r)}
@@ -654,7 +709,7 @@
     CATS.filter((c) => c.rare && !owned(c.id)).forEach((c) => {
       const u = c.unlock;
       const ok = (u.type === "streak" && s.best_streak >= u.n) || (u.type === "total" && s.total_correct >= u.n) || (u.type === "packstar" && s.packstars >= u.n) || (u.type === "fixed" && s.fixed_total >= u.n);
-      if (ok) { s.cats.push({ id: c.id, acc: {} }); out.push(c.id); }
+      if (ok) { s.cats.push(newCat(c.id)); out.push(c.id); }
     });
     if (out.length && !returnList) { saveState(); setTimeout(() => revealCat(out[0], true), 600); }
     return out;
@@ -664,43 +719,60 @@
     const s = st();
     $app.innerHTML = `${topbar()}<main class="screen cats">
       <h1 class="title">Meine Kätzchen <small>${s.cats.length} / ${CATS.length}</small></h1>
+      ${careCard()}
       <div class="cat-grid">${CATS.map((c) => {
         const o = s.cats.find((x) => x.id === c.id);
-        if (o) return `<button class="cat-tile ${s.fav === c.id ? "fav" : ""} ${c.rare ? "rare" : ""}" data-act="opencat" data-id="${c.id}">
-          ${catSVG(c, { acc: o.acc, mood: S.profile.today_correct ? "happy" : "sleep", cls: "cat-md" })}<span>${esc(c.name)}${s.fav === c.id ? " 💖" : ""}</span></button>`;
+        if (o) {
+          const stg = stageOf(o);
+          return `<button class="cat-tile ${s.fav === c.id ? "fav" : ""} ${c.rare ? "rare" : ""} st-${needs(o).state}" data-act="opencat" data-id="${c.id}">
+          ${catImg(o, { cls: "cat-md" })}<span>${esc(c.name)}${s.fav === c.id ? " 💖" : ""}</span>
+          <span class="tile-status">${statusIcon(o)} ${heartsHTML(o)}</span><span class="tile-stage">${stg.name}${stg.stars ? " " + "⭐".repeat(stg.stars) : ""}</span></button>`;
+        }
         return `<div class="cat-tile locked ${c.rare ? "rare" : ""}">${catSVG(c, { silhouette: true, cls: "cat-md" })}
-          <span>${c.rare ? "⭐ " + esc(c.unlock.text) : "Im Körbchen"}</span></div>`;
-      }).join("")}</div></main>${bottomnav("cats")}`;
+          <span>${c.rare ? "⭐ " + esc(c.unlock.text) : "🏆 Erfolg oder 🧺 Adoption"}</span></div>`;
+      }).join("")}</div>
+      ${achievementsHTML()}</main>${bottomnav("cats")}`;
   }
 
   function openCat(id) {
     const s = st(), o = s.cats.find((x) => x.id === id), c = Cats.byId(id);
     if (!o) return;
-    o.acc = o.acc || {};
-    const accs = s.accessories;
-    const ownedBySlot = SLOTS.map((sl) => ({ sl, items: ACCESSORIES.filter((a) => a.slot === sl.id && accs.includes(a.id)) })).filter((x) => x.items.length);
+    o.acc = o.acc || {}; o.items = o.items || [];
+    const n = needs(o), stg = stageOf(o);
+    const wear = SLOTS.map((sl) => ({ sl, items: ACCESSORIES.filter((a) => a.slot === sl.id && o.items.includes(a.id)) })).filter((x) => x.items.length);
+    const home = HOME_ITEMS.filter((h) => o.items.includes(h.id));
     showOverlay(`<div class="cat-detail">
-      <button class="pet" data-act="pet" data-id="${id}">${catSVG(c, { acc: o.acc, mood: "happy", cls: "cat-xl" })}</button>
-      <h2>${esc(c.name)}${c.rare ? " ⭐" : ""}</h2><p class="muted">Tippe mich an zum Streicheln!</p>
-      ${ownedBySlot.length ? `<h3>Anziehen</h3>${ownedBySlot.map(({ sl, items }) => `<div class="slot-row"><span class="slot-name">${sl.emoji} ${sl.name}</span>
+      <div class="cat-scene">${hasItem(o, "tree") ? `<span class="scene-tree">${TREE_SVG}</span>` : ""}${hasItem(o, "bed") ? `<span class="scene-bed">${BED_SVG}</span>` : ""}
+        <button class="pet" data-act="pet" data-id="${id}">${catImg(o, { cls: "cat-xl" })}</button></div>
+      <h2>${esc(c.name)}${c.rare ? " ⭐" : ""}</h2>
+      <p class="stage">${stg.name}${stg.stars ? " " + "⭐".repeat(stg.stars) : ""} · ${heartsHTML(o)}</p>
+      <div class="grow-bar" title="Wachstum"><i style="width:${growPct(o)}%"></i></div>
+      <p class="status">${statusLine(o)}</p>
+      <div class="care-row">
+        <button class="care ${n.fedToday ? "done" : n.hunger ? "need" : ""}" data-act="feed" data-id="${id}"><span>🍽️</span><small>${n.fedToday ? "satt" : "Füttern"}</small><em>🥫 ${s.food}</em></button>
+        <button class="care ${n.brushedToday ? "done" : n.messy ? "need" : ""}" data-act="brush" data-id="${id}"><span>🪮</span><small>${hasItem(o, "brush") ? (n.brushedToday ? "gebürstet" : "Bürsten") : "keine Bürste"}</small></button>
+        <button class="care" data-act="treat" data-id="${id}"><span>🍪</span><small>Leckerli</small><em>${s.treats}</em></button>
+      </div>
+      ${home.length ? `<p class="small muted">Gehört ${esc(c.name)}: ${home.map((h) => h.emoji + " " + h.name).join(" · ")}</p>` : ""}
+      ${wear.length ? `<h3>Anziehen</h3>${wear.map(({ sl, items }) => `<div class="slot-row"><span class="slot-name">${sl.emoji} ${sl.name}</span>
         <div class="acc-row"><button class="acc ${!o.acc[sl.id] ? "on" : ""}" data-act="wear" data-id="${id}" data-slot="${sl.id}" data-acc="">✖️</button>
         ${items.map((a) => `<button class="acc ${o.acc[sl.id] === a.id ? "on" : ""}" data-act="wear" data-id="${id}" data-slot="${sl.id}" data-acc="${a.id}" title="${esc(a.name)}">${a.emoji}</button>`).join("")}</div></div>`).join("")}`
-        : `<p class="muted small">Im Laden gibt es Mäntelchen, Hüte, Brillen und noch viel mehr zum Anziehen.</p>`}
+        : `<p class="muted small">Im Laden kannst du ${esc(c.name)} Mäntelchen, Hüte und noch viel mehr kaufen.</p>`}
       <div class="row"><button class="btn ghost" data-act="close">Zurück</button>
       ${s.fav === id ? `<span class="badge">💖 Liebling</span>` : `<button class="btn" data-act="setfav" data-id="${id}">💖 Mein Liebling</button>`}</div></div>`);
   }
 
   function pet(btn) {
-    sfx.purr();
     const id = btn.dataset.id, o = st().cats.find((x) => x.id === id);
-    btn.innerHTML = catSVG(id, { acc: o.acc, mood: "joy", cls: "cat-xl jump" });
+    catTap(id);
+    btn.innerHTML = catImg(o, { mood: "joy", cls: "cat-xl jump" });
     for (let i = 0; i < 5; i++) {
       const h = document.createElement("span"); h.className = "heart"; h.textContent = pick(["💖", "💕", "💗", "✨"]);
       h.style.left = 30 + Math.random() * 40 + "%"; h.style.animationDelay = i * 0.12 + "s";
       btn.appendChild(h); setTimeout(() => h.remove(), 1500);
     }
     clearTimeout(pet._t);
-    pet._t = setTimeout(() => { if (btn.isConnected) btn.innerHTML = catSVG(id, { acc: o.acc, mood: "happy", cls: "cat-xl" }); }, 1400);
+    pet._t = setTimeout(() => { if (btn.isConnected) btn.innerHTML = catImg(o, { cls: "cat-xl" }); }, 1400);
   }
 
   function revealCat(id, rare) {
@@ -713,6 +785,229 @@
       <button class="btn big" data-act="close">Hallo ${esc(c.name)}! 👋</button></div>`, "reveal-sheet");
     setTimeout(() => { $overlay.querySelector(".reveal")?.classList.add("open"); sfx.fanfare(); confetti(); speak(`${c.name} zieht bei dir ein!`); }, 1100);
   }
+
+
+  // ------------------------------------------------------------------ Kätzchen-Leben (Tamagotchi)
+  const FOOD = [
+    { id: "food", name: "Futterdose", emoji: "🥫", price: 3, food: 1, desc: "1 Mahlzeit für 1 Kätzchen" },
+    { id: "foodpack", name: "Vorratspaket", emoji: "📦", price: 13, food: 5, desc: "5 Futterdosen – 2 🐟 gespart" },
+    { id: "treat", name: "Leckerli", emoji: "🍪", price: 2, treat: 1, desc: "+1 ❤️ für ein Kätzchen" },
+  ];
+  const HOME_ITEMS = [
+    { id: "brush", name: "Bürste", emoji: "🪮", price: 10, desc: "Damit bürstest du dein Kätzchen (alle paar Tage)" },
+    { id: "tree", name: "Kratzbaum", emoji: "🌳", price: 25, desc: "Spielen! Die Laune sinkt nur halb so schnell" },
+    { id: "bed", name: "Schlafkörbchen", emoji: "🛏️", price: 20, desc: "Gut geschlafen wächst man doppelt so schnell" },
+  ];
+  const TREE_SVG = `<svg viewBox="0 0 60 130" class="tree-svg"><rect x="26" y="18" width="9" height="100" fill="#d6b48a" stroke="#a16207"/>
+    <rect x="6" y="114" width="48" height="12" rx="5" fill="#a78bfa"/><rect x="2" y="60" width="36" height="9" rx="4" fill="#a78bfa"/>
+    <rect x="22" y="10" width="36" height="9" rx="4" fill="#a78bfa"/><path d="M50 19 L50 34" stroke="#9ca3af" stroke-width="1.5"/><circle cx="50" cy="38" r="5" fill="#f472b6"/></svg>`;
+  const BED_SVG = `<svg viewBox="0 0 200 54" class="bed-svg"><ellipse cx="100" cy="32" rx="97" ry="20" fill="#b45309"/>
+    <ellipse cx="100" cy="25" rx="85" ry="13" fill="#f9a8d4"/><path d="M6 30 Q100 66 194 30" stroke="#92400e" stroke-width="4" fill="none"/></svg>`;
+  const STAGES = [{ min: 0, name: "Baby", cls: "stage-baby" }, { min: 8, name: "Jungkatze", cls: "stage-young" }, { min: 25, name: "Große Katze", cls: "stage-big" }];
+
+  const D = (iso) => { const [y, m, d] = String(iso).split("-").map(Number); return new Date(y, m - 1, d, 12); };
+  function schoolDaysSince(iso) {                 // Schultage (Mo–Fr) nach iso bis heute
+    if (!iso) return 0;
+    const d = D(iso), end = D(today()); let n = 0, guard = 0;
+    while (d < end && guard++ < 400) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd >= 1 && wd <= 5) n++; }
+    return n;
+  }
+  const isWeekend = () => { const wd = now().getDay(); return wd === 0 || wd === 6; };
+  const hasItem = (c, id) => !!c && (c.items || []).includes(id);
+  function newCat(id) { return { id, acc: {}, items: [], fed: today(), brushed: today(), hearts: 3, growth: 0 }; }
+  function needs(c) {
+    const hunger = schoolDaysSince(c.fed), messy = schoolDaysSince(c.brushed) >= 3;
+    let state = "ok";
+    if (hunger >= 3) state = "exhausted"; else if (hunger >= 2 || c.hearts <= 1) state = "sad"; else if (hunger >= 1) state = "hungry";
+    const mood = state === "exhausted" ? "sleep" : state === "sad" ? "sad" : state === "hungry" ? "wow" : c.hearts >= 4 ? "joy" : "happy";
+    return { hunger, messy, state, mood, fedToday: c.fed === today(), brushedToday: c.brushed === today() };
+  }
+  function stageOf(c) {
+    let x = STAGES[0];
+    STAGES.forEach((t) => { if ((c.growth || 0) >= t.min) x = t; });
+    const stars = c.growth >= 25 ? Math.min(3, Math.floor((c.growth - 25) / 25)) : 0;
+    return Object.assign({ stars }, x);
+  }
+  function growPct(c) {
+    const g = c.growth || 0;
+    const [a, b] = g < 8 ? [0, 8] : g < 25 ? [8, 25] : [25 + 25 * Math.floor((g - 25) / 25), 50 + 25 * Math.floor((g - 25) / 25)];
+    return Math.min(100, Math.round((g - a) / (b - a) * 100));
+  }
+  function catImg(c, opts) {
+    const n = needs(c), stg = stageOf(c);
+    return catSVG(c.id, Object.assign({ acc: c.acc, mood: n.mood, messy: n.messy }, opts, { cls: `${(opts && opts.cls) || ""} ${stg.cls}` }));
+  }
+  const heartsHTML = (c) => `<span class="hearts">${"❤️".repeat(c.hearts)}${"🤍".repeat(Math.max(0, 5 - c.hearts))}</span>`;
+  function statusLine(c) {
+    const n = needs(c);
+    if (n.state === "exhausted") return "💤 ganz erschöpft – braucht dringend Futter!";
+    if (n.state === "sad") return n.hunger >= 2 ? "😢 sehr hungrig und traurig" : "😢 traurig – rechne eine Runde mit mir!";
+    if (n.state === "hungry") return "🍽️ hungrig";
+    if (n.messy) return "🪮 Fell ganz zerzaust";
+    return c.hearts >= 4 ? "😻 überglücklich" : "😺 zufrieden";
+  }
+  function statusIcon(c) { const n = needs(c); return n.state === "exhausted" ? "💤" : n.state === "sad" ? "😢" : n.state === "hungry" ? "🍽️" : n.messy ? "🪮" : "😺"; }
+
+  // Laune: an Schultagen ohne gerechnete Runde -1 ❤️ (Kratzbaum: nur jeden 2. Tag)
+  function applyDecay() {
+    const s = st();
+    if (!s.joyCheck) { s.joyCheck = today(); return; }
+    const d = D(s.joyCheck), end = D(yesterday()); let changed = false, guard = 0;
+    while (d < end && guard++ < 400) {
+      d.setDate(d.getDate() + 1);
+      const iso = isoDay(d), wd = d.getDay();
+      if (wd >= 1 && wd <= 5 && !s.playDays.includes(iso)) {
+        s.cats.forEach((c) => { if (hasItem(c, "tree") && (c.treeSkip = !c.treeSkip)) return; c.hearts = Math.max(0, c.hearts - 1); });
+      }
+      changed = true;
+    }
+    if (changed) { s.joyCheck = yesterday(); saveState(); }
+  }
+  function joyAfterRound(rate) {
+    const s = st(), plus = rate >= 0.9 ? 2 : 1;
+    s.cats.forEach((c) => { c.hearts = Math.min(5, (c.hearts || 0) + plus); });
+    if (!s.playDays.includes(today())) { s.playDays.push(today()); if (s.playDays.length > 120) s.playDays.shift(); }
+    return plus;
+  }
+  function careCheck() {
+    const s = st();
+    if (isWeekend() || s.careLast === today() || !s.cats.length || !s.cats.every((c) => c.fed === today())) return;
+    s.careStreak = s.careLast && schoolDaysSince(s.careLast) <= 1 ? s.careStreak + 1 : 1;
+    s.careLast = today();
+    if (s.careStreak >= 5) { s.careWeeks++; s.careStreak = 0; }
+  }
+  function feedCat(id, quiet) {
+    const s = st(), c = s.cats.find((x) => x.id === id); if (!c) return false;
+    const n = needs(c), name = Cats.byId(id).name;
+    if (n.fedToday) { if (!quiet) toast(`${name} ist schon satt 😊`); return false; }
+    if (s.food < 1) { if (!quiet) toast("Kein Futter mehr – im Laden gibt es Futterdosen 🥫"); return false; }
+    s.food--; c.fed = today();
+    const before = stageOf(c);
+    if (c.hearts >= 3 && !n.messy && c.lastGrow !== today()) { c.growth = (c.growth || 0) + 1 + (hasItem(c, "bed") ? 1 : 0); c.lastGrow = today(); }
+    const after = stageOf(c);
+    careCheck(); saveState();
+    if (before.name !== after.name || before.stars !== after.stars) celebrateGrowth(c);
+    else if (!quiet) { meow(1.15); toast(`🍽️ ${name}: Mmmh, lecker! Danke!`); setTimeout(() => speak("Mmmh, lecker! Danke!"), 600); }
+    return true;
+  }
+  function feedAll() {
+    const s = st(); let fed = 0;
+    for (const c of s.cats) { if (needs(c).hunger >= 1 && s.food > 0 && feedCat(c.id, true)) fed++; }
+    if (!fed) { toast(s.food < 1 ? "Kein Futter mehr – im Laden gibt es Futterdosen 🥫" : "Alle Kätzchen sind satt 😊"); return; }
+    meow(1.1); toast(`🍽️ ${fed} ${fed === 1 ? "Kätzchen" : "Kätzchen"} gefüttert – mmmh, lecker!`); setTimeout(() => speak("Mmmh, lecker! Danke!"), 600);
+    checkAchievements(); render();
+  }
+  function brushCat(id) {
+    const s = st(), c = s.cats.find((x) => x.id === id); if (!c) return;
+    const name = Cats.byId(id).name;
+    if (!hasItem(c, "brush")) { toast(`${name} braucht zuerst eine eigene Bürste 🪮 – die gibt es im Laden.`, 3500); return; }
+    if (c.brushed === today()) { toast("Heute schon gebürstet – so schön flauschig! ✨"); return; }
+    c.brushed = today(); c.hearts = Math.min(5, c.hearts + 1); saveState();
+    sfx.purr(); toast(`✨ ${name} ist jetzt ganz flauschig! +1 ❤️`); openCat(id);
+  }
+  function treatCat(id) {
+    const s = st(), c = s.cats.find((x) => x.id === id); if (!c) return;
+    const name = Cats.byId(id).name;
+    if (s.treats < 1) { toast("Keine Leckerli mehr – im Laden gibt es welche 🍪"); return; }
+    if (c.hearts >= 5) { toast(`${name} ist schon überglücklich 😻`); return; }
+    s.treats--; c.hearts = Math.min(5, c.hearts + 1); saveState(); meow(1.25);
+    toast(`🍪 Mmmh! +1 ❤️ für ${name}`); openCat(id);
+  }
+  function celebrateGrowth(c) {
+    const stg = stageOf(c), name = Cats.byId(c.id).name;
+    st().fish += 10; saveState();
+    setTimeout(() => {
+      showOverlay(`<div class="reveal open"><div class="reveal-cat">${catImg(c, { cls: "cat-xl jump", mood: "joy" })}</div>
+        <h2>${esc(name)} ist gewachsen! 🎉</h2><p class="big">Jetzt: <b>${stg.name}</b>${stg.stars ? " " + "⭐".repeat(stg.stars) : ""}</p><p>+10 🐟 Belohnung</p>
+        <button class="btn big" data-act="close">Toll! 🐾</button></div>`, "reveal-sheet");
+      sfx.fanfare(); confetti(); speak(`${name} ist gewachsen!`);
+    }, 300);
+  }
+  function catSpeech(c) {
+    const n = needs(c), name = Cats.byId(c.id).name;
+    if (n.state === "exhausted") return "Miau… ich bin so müde. Ich habe großen Hunger!";
+    if (n.hunger >= 1) return `Ich bin ${name}! Ich habe Hunger!`;
+    if (n.state === "sad") return `Ich bin ${name}. Ich bin ein bisschen traurig. Rechnest du mit mir?`;
+    if (n.messy) return `Ich bin ${name}! Bürstest du mich?`;
+    return pick([`Ich bin ${name}!`, `Ich bin ${name}! Ich hab dich lieb!`, `Hallo, ich bin ${name}!`]);
+  }
+  function catTap(id) {
+    const c = st().cats.find((x) => x.id === id); if (!c) return;
+    meow(0.9 + Math.random() * 0.35);
+    setTimeout(() => speak(catSpeech(c)), 700);
+  }
+  function careCard() {
+    const s = st(); if (!s.cats.length) return "";
+    const hungry = s.cats.filter((c) => needs(c).hunger >= 1), messy = s.cats.filter((c) => needs(c).messy), sad = s.cats.filter((c) => c.hearts <= 1);
+    let msg;
+    if (hungry.length) msg = `<b>${hungry.length === 1 ? esc(Cats.byId(hungry[0].id).name) + " hat" : hungry.length + " Kätzchen haben"} Hunger!</b>`;
+    else if (isWeekend()) msg = `<b>Wochenende!</b> Alle sind satt und entspannt.`;
+    else msg = `<b>Alle Kätzchen sind satt.</b>`;
+    const extra = [messy.length ? `🪮 ${messy.length} zerzaust` : "", sad.length ? `😢 ${sad.length} traurig – rechne eine Runde!` : ""].filter(Boolean).join(" · ");
+    return `<section class="care-card ${hungry.length ? "alert" : ""}">
+      <div class="cc-cats">${s.cats.slice(0, 6).map((c) => `<span class="cc-cat" data-act="opencat" data-id="${c.id}">${catImg(c, { cls: "cat-xs2" })}<i>${statusIcon(c)}</i></span>`).join("")}${s.cats.length > 6 ? `<span class="cc-more">+${s.cats.length - 6}</span>` : ""}</div>
+      <div class="cc-text">${msg}${extra ? `<small>${extra}</small>` : ""}<small>🥫 Futter: ${s.food} · 🍪 Leckerli: ${s.treats}</small></div>
+      ${hungry.length ? (s.food ? `<button class="btn small" data-act="feedall">🍽️ Füttern</button>` : `<button class="btn small" data-act="nav" data-v="shop">🛒 Futter</button>`) : ""}</section>`;
+  }
+  function careReminder() {
+    const s = st(), hungry = s.cats.filter((c) => needs(c).hunger >= 1).length;
+    if (!hungry) return "";
+    return `<div class="care-remind">🍽️ ${hungry === 1 ? "Ein Kätzchen hat" : hungry + " Kätzchen haben"} Hunger!
+      ${s.food ? `<button class="btn small" data-act="feedall">Jetzt füttern</button>` : `<button class="btn small" data-act="nav" data-v="shop">Futter kaufen</button>`}</div>`;
+  }
+
+  // ------------------------------------------------------------------ Erfolge (neue Kätzchen nur für Leistung)
+  const ACH_GROUPS = [
+    { key: "streak", icon: "🔥", tiers: [5, 10, 15, 20, 30, 40, 60], cur: (s) => curStreak(), best: (s) => s.best_streak, label: (n) => `${n} Tage hintereinander üben` },
+    { key: "perfect", icon: "🏅", tiers: [1, 3, 6, 10, 15, 20], cur: (s) => s.perfectL3, label: (n) => n === 1 ? "Eine Runde Level 3 ohne Fehler" : `${n} Runden Level 3 ohne Fehler` },
+    { key: "fixed", icon: "🔧", tiers: [10, 25, 50, 75, 100], cur: (s) => s.fixed_total, label: (n) => `${n} Fehler in der Werkstatt ausbessern` },
+    { key: "grade", icon: "📝", tiers: [1, 3, 5, 10], cur: (s) => s.grade1, label: (n) => n === 1 ? "Einen Test mit Note 1 schaffen" : `${n} Tests mit Note 1` },
+    { key: "care", icon: "🐱", tiers: [1, 2, 4, 8, 12], cur: (s) => s.careWeeks, label: (n) => n === 1 ? "Eine Schulwoche alle Kätzchen füttern" : `${n} Schulwochen alle Kätzchen füttern` },
+  ];
+  function checkAchievements() {
+    const s = st(); let n = 0;
+    ACH_GROUPS.forEach((g) => g.tiers.forEach((t) => {
+      const id = g.key + t, val = (g.best || g.cur)(s);
+      if (!s.achieved.includes(id) && val >= t) { s.achieved.push(id); addGift("achievement", { text: g.label(t).replace("üben", "geübt").replace("ausbessern", "ausgebessert").replace("schaffen", "geschafft").replace("füttern", "gefüttert") }); n++; }
+    }));
+    if (n) saveState();
+    return n;
+  }
+  function achievementsHTML() {
+    const s = st();
+    const rows = ACH_GROUPS.map((g) => {
+      const t = g.tiers.find((x) => !s.achieved.includes(g.key + x));
+      if (!t) return `<li class="done">${g.icon} Alle ${g.key === "streak" ? "Serien" : ""} Ziele geschafft! 🌟</li>`;
+      const v = Math.min(t, g.cur(s) || 0);
+      return `<li>${g.icon} ${esc(g.label(t))}<span class="ach-bar"><i style="width:${Math.round(v / t * 100)}%"></i></span><small>${v} / ${t}</small></li>`;
+    }).join("");
+    return `<h2 class="sec">🏆 Erfolge – dafür gibt es neue Kätzchen</h2><ul class="ach-list">${rows}</ul>`;
+  }
+
+  // ------------------------------------------------------------------ Jahreszeiten
+  function easter(y) {
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(y, month - 1, day, 12);
+  }
+  function eventsOf(y) {
+    const e = easter(y), add = (dt, n) => { const x = new Date(dt); x.setDate(x.getDate() + n); return x; };
+    return [
+      { id: "fasching", name: "Fasching", emoji: "🎭", from: add(e, -60), to: add(e, -47), greeting: "🎭 Fasching! Verkleiden wir uns? Im Laden gibt es Masken!" },
+      { id: "ostern", name: "Ostern", emoji: "🐣", from: add(e, -14), to: add(e, 7), greeting: "🐣 Bald ist Ostern! Im Laden gibt es Hasenohren!" },
+      { id: "sommer", name: "Sommer", emoji: "☀️", from: new Date(y, 5, 20, 12), to: new Date(y, 6, 12, 12), greeting: "☀️ Bald sind Sommerferien! Holst du mir einen Sonnenhut?" },
+      { id: "halloween", name: "Halloween", emoji: "🎃", from: new Date(y, 9, 20, 12), to: new Date(y, 10, 2, 12), greeting: "Huuu! 🎃 Halloween-Zeit! Im Laden gibt es gruselig-schöne Sachen." },
+      { id: "advent", name: "Advent & Weihnachten", emoji: "🎄", from: new Date(y, 11, 1, 12), to: new Date(y, 11, 26, 12), greeting: "🎄 Adventzeit! Hast du heute schon dein Türchen geöffnet?" },
+    ];
+  }
+  function currentEvent() { const d = D(today()); return eventsOf(d.getFullYear()).find((e) => d >= e.from && d <= e.to) || null; }
+  function nextEvent() {
+    const d = D(today());
+    for (const y of [d.getFullYear(), d.getFullYear() + 1]) { const e = eventsOf(y).find((x) => x.from > d); if (e) return e; }
+    return null;
+  }
+  const fmtDay = (dt) => dt.toLocaleDateString("de-AT", { day: "numeric", month: "numeric" });
 
   // ------------------------------------------------------------------ Überraschungen 🎁
   function addGift(kind, extra) { st().giftQueue.push(Object.assign({ kind }, extra || {})); }
@@ -742,32 +1037,53 @@
     return `<button class="btn big gift-btn pulse" data-act="opengift">🎁 Überraschung gefunden! Öffnen</button>`;
   }
 
+  function favOwn() { const s = st(); return s.cats.find((c) => c.id === s.fav) || s.cats[0]; }
+  function itemPool(kind) {
+    const f = favOwn(), has = (id) => hasItem(f, id);
+    if (kind === "secret") return ACCESSORIES.filter((a) => a.surprise && !has(a.id));
+    const ev = currentEvent();
+    return ev ? ACCESSORIES.filter((a) => a.event === ev.id && !has(a.id)) : [];
+  }
+
   function rollGift(g) {
-    const s = st();
-    const secret = ACCESSORIES.filter((a) => a.surprise && !s.accessories.includes(a.id));
+    const secret = itemPool("secret"), evItems = itemPool("event"), ev = currentEvent();
     const kittens = CATS.filter((c) => !c.rare && !owned(c.id));
     const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+    if (g.kind === "achievement") {
+      const title = `🏆 ${g.text}`;
+      if (kittens.length) return { type: "kitten", cat: pick(kittens).id, title };
+      if (secret.length) return { type: "item", item: pick(secret).id, bonus: 10, title };
+      return { type: "fish", n: 25, title };
+    }
     if (g.kind === "daily") {
+      const dd = D(today());
+      if (ev && ev.id === "advent" && dd.getMonth() === 11 && dd.getDate() <= 24) {
+        const n = dd.getDate(), title = `🎄 Adventkalender – Türchen ${n}`;
+        if ((n === 6 || n === 24) && (evItems.length || secret.length)) return { type: "item", item: pick(evItems.length ? evItems : secret).id, bonus: n === 24 ? 20 : 5, title };
+        if (n % 4 === 0) return { type: "food", n: 2, bonus: 4, title };
+        return { type: "fish", n: 8 + Math.ceil(n / 3), title };
+      }
       const streakDay = Math.max(1, curStreak());
       if (streakDay % 7 === 0 && secret.length) return { type: "item", item: pick(secret).id, title: `${streakDay} Tage hintereinander geübt!` };
       return { type: "fish", n: 5 + 2 * Math.min(streakDay, 7), title: streakDay > 1 ? `Tag ${streakDay} in Folge – dein Tagesgeschenk!` : "Dein Tagesgeschenk!" };
     }
     if (g.kind === "milestone") {
       if (secret.length && Math.random() < 0.6) return { type: "item", item: pick(secret).id, bonus: 10, title: `${g.m} Aufgaben richtig gelöst!` };
-      if (kittens.length) return { type: "kitten", cat: pick(kittens).id, bonus: 10, title: `${g.m} Aufgaben richtig gelöst!` };
       return { type: "fish", n: 30, title: `${g.m} Aufgaben richtig gelöst!` };
     }
-    const pool = [["fish", 45], ["boost", 20], ["bigfish", 8]];
-    if (secret.length) pool.push(["item", 18]);
-    if (kittens.length) pool.push(["kitten", 7]);
+    const pool = [["fish", 40], ["boost", 18], ["bigfish", 8], ["food", 16], ["treats", 12]];
+    if (secret.length) pool.push(["item", 10]);
+    if (evItems.length) pool.push(["event", 20]);
     const total = pool.reduce((a, [, w]) => a + w, 0);
     let r = Math.random() * total, type = "fish";
     for (const [k, w] of pool) { if ((r -= w) < 0) { type = k; break; } }
     if (type === "fish") return { type: "fish", n: rnd(5, 12), title: "Fischlein-Regen!" };
     if (type === "bigfish") return { type: "fish", n: rnd(18, 25), title: "Riesen-Fischlein-Regen!" };
     if (type === "boost") return { type: "boost", title: "Glücks-Pfote!" };
-    if (type === "item") return { type: "item", item: pick(secret).id, title: "Ein Geheim-Teil!" };
-    return { type: "kitten", cat: pick(kittens).id, title: "Ein Kätzchen im Geschenk!" };
+    if (type === "food") return { type: "food", n: rnd(2, 3), title: "Ein Futterpaket!" };
+    if (type === "treats") return { type: "treats", n: rnd(2, 4), title: "Leckerli-Überraschung!" };
+    if (type === "event") return { type: "item", item: pick(evItems).id, title: `${ev.emoji} ${ev.name}-Überraschung!` };
+    return { type: "item", item: pick(secret).id, title: "Ein Geheim-Teil!" };
   }
 
   function openGift() {
@@ -776,7 +1092,6 @@
     if (!g) return;
     if (S.result) S.result.giftsNew = s.giftQueue.length;
     const rw = rollGift(g);
-    const fc = favCat();
     let body = "";
     if (rw.type === "fish") {
       s.fish += rw.n;
@@ -784,16 +1099,20 @@
     } else if (rw.type === "boost") {
       s.boost = (s.boost || 0) + 1;
       body = `<div class="gift-big">🍀</div><p class="big">Deine <b>nächste Runde</b> bringt <b>doppelte Fischlein</b>!</p>`;
+    } else if (rw.type === "food") {
+      s.food += rw.n;
+      body = `<div class="gift-big">${"🥫".repeat(rw.n)}</div><p class="big"><b>+${rw.n} Futterdosen</b> für deine Kätzchen!</p>`;
+    } else if (rw.type === "treats") {
+      s.treats += rw.n;
+      body = `<div class="gift-big">${"🍪".repeat(rw.n)}</div><p class="big"><b>+${rw.n} Leckerli!</b></p>`;
     } else if (rw.type === "item") {
-      const a = ACCESSORIES.find((x) => x.id === rw.item);
-      s.accessories.push(a.id);
-      const fav = s.cats.find((c) => c.id === s.fav) || s.cats[0];
-      if (fav) { fav.acc = fav.acc || {}; fav.acc[a.slot] = a.id; }
-      body = `${catSVG(fc.def, { acc: fav ? fav.acc : { [a.slot]: a.id }, mood: "joy", cls: "cat-lg jump" })}
-        <p class="big">${a.emoji} <b>${esc(a.name)}</b></p><p class="muted">Das gibt es in keinem Laden – nur für dich!</p>`;
+      const a = ACCESSORIES.find((x) => x.id === rw.item), f = favOwn();
+      if (f && !f.items.includes(a.id)) { f.items.push(a.id); f.acc[a.slot] = a.id; }
+      body = `${f ? catImg(f, { mood: "joy", cls: "cat-lg jump" }) : ""}
+        <p class="big">${a.emoji} <b>${esc(a.name)}</b></p><p class="muted">${f ? esc(Cats.byId(f.id).name) + " trägt es schon!" : ""}${a.surprise ? " Das gibt es in keinem Laden." : ""}</p>`;
     } else if (rw.type === "kitten") {
-      s.cats.push({ id: rw.cat, acc: {} });
-      body = `${catSVG(rw.cat, { mood: "joy", cls: "cat-lg jump" })}<p class="big"><b>${esc(Cats.byId(rw.cat).name)}</b> zieht bei dir ein!</p>`;
+      s.cats.push(newCat(rw.cat));
+      body = `${catSVG(rw.cat, { mood: "joy", cls: "cat-lg jump stage-baby" })}<p class="big"><b>${esc(Cats.byId(rw.cat).name)}</b> zieht bei dir ein!</p><p class="muted">Vergiss nicht: Futter, Bürste und ganz viel Rechnen 😺</p>`;
     }
     if (rw.bonus) { s.fish += rw.bonus; body += `<p>+ ${rw.bonus} 🐟 Bonus</p>`; }
     saveState();
@@ -802,30 +1121,54 @@
       <div class="basket">🎁</div>
       <div class="reveal-cat"><h2>${esc(rw.title)}</h2>${body}</div>
       <div class="row">${more ? `<button class="btn big" data-act="opengift">🎁 Nächste öffnen (${more})</button>` : `<button class="btn big" data-act="close">Juhu! 🎉</button>`}</div></div>`, "reveal-sheet");
-    setTimeout(() => { $overlay.querySelector(".reveal")?.classList.add("open"); sfx.fanfare(); confetti(); }, 1100);
+    setTimeout(() => { $overlay.querySelector(".reveal")?.classList.add("open"); sfx.fanfare(); confetti(); if (rw.type === "kitten") meow(1.3); }, 1100);
   }
 
   // ------------------------------------------------------------------ Laden
+  const allItems = () => ACCESSORIES.concat(HOME_ITEMS);
+  const findItem = (id) => allItems().find((x) => x.id === id);
+  const ownedCount = (id) => st().cats.filter((c) => hasItem(c, id)).length;
+
+  function shopCard(a, opts) {
+    const s = st(), cnt = ownedCount(a.id), all = cnt >= s.cats.length, fc = favCat();
+    const preview = a.slot ? catSVG(fc.def, { acc: { [a.slot]: a.id }, cls: "cat-sm" }) : `<span class="ae">${a.emoji}</span>`;
+    const tag = opts && opts.tag ? `<span class="shop-tag">${opts.tag}</span>` : "";
+    return `<div class="acc-card ${cnt ? "has" : ""}">${tag}${preview}<span>${a.slot ? a.emoji + " " : ""}${esc(a.name)}</span>
+      ${a.desc ? `<small class="muted">${esc(a.desc)}</small>` : ""}
+      ${cnt ? `<span class="owned">Du hast ${cnt}×</span>` : ""}
+      ${all ? `<span class="badge">✔ alle Kätzchen haben es</span>` : `<button class="btn small" data-act="buyitem" data-id="${a.id}" ${s.fish < a.price ? "disabled" : ""}>${a.price} 🐟</button>`}</div>`;
+  }
+
   function renderShop() {
-    const s = st(), left = commonLeft();
+    const s = st(), left = commonLeft(), tab = S.shopTab || "all", ev = currentEvent(), nx = nextEvent();
+    const normal = ACCESSORIES.filter((a) => !a.event && (tab === "all" || a.slot === tab));
+    const evItems = ev ? ACCESSORIES.filter((a) => a.event === ev.id) : [];
     $app.innerHTML = `${topbar()}<main class="screen shop">
       <h1 class="title">Laden</h1>
+      ${giftBanner()}
+      <h2 class="sec">🍽️ Futter &amp; Leckerli</h2>
+      <p class="stock">Vorrat: <b>🥫 ${s.food} Futterdosen</b> · <b>🍪 ${s.treats} Leckerli</b> · ${s.cats.length} ${s.cats.length === 1 ? "Kätzchen braucht" : "Kätzchen brauchen"} pro Schultag ${s.cats.length} ${s.cats.length === 1 ? "Dose" : "Dosen"}</p>
+      <div class="acc-shop food-shop">${FOOD.map((f) => `<div class="acc-card food"><span class="ae">${f.emoji}</span><span>${f.name}</span><small class="muted">${f.desc}</small>
+        <button class="btn small" data-act="buyfood" data-id="${f.id}" ${s.fish < f.price ? "disabled" : ""}>${f.price} 🐟</button></div>`).join("")}</div>
+      ${ev ? `<h2 class="sec">${ev.emoji} ${ev.name} – nur jetzt!</h2><div class="acc-shop">${evItems.map((a) => shopCard(a, { tag: "Nur jetzt" })).join("")}</div>`
+        : nx ? `<div class="event-next">${nx.emoji} Bald: <b>${nx.name}</b> ab ${fmtDay(nx.from)} – dann gibt es hier besondere Sachen!</div>` : ""}
+      <h2 class="sec">🏠 Zuhause</h2>
+      <div class="acc-shop">${HOME_ITEMS.map((a) => shopCard(a)).join("")}</div>
+      <h2 class="sec">🎀 Zum Anziehen</h2>
+      <div class="chips shop-tabs">${[{ id: "all", emoji: "✨", name: "Alles" }].concat(SLOTS).map((sl) => `<button class="chip ${tab === sl.id ? "on" : ""}" data-act="shoptab" data-k="${sl.id}">${sl.emoji} ${sl.name}</button>`).join("")}</div>
+      <div class="acc-shop">${normal.map((a) => {
+        if (!a.surprise) return shopCard(a);
+        const cnt = ownedCount(a.id);
+        return cnt ? `<div class="acc-card rare has">${catSVG(favCat().def, { acc: { [a.slot]: a.id }, cls: "cat-sm" })}<span>${a.emoji} ${esc(a.name)}</span><span class="owned">Du hast ${cnt}×</span><small class="muted">nur in Überraschungen</small></div>`
+          : `<div class="acc-card secret"><span class="ae">🎁</span><span>Geheim-Teil</span><span class="small muted">nur in Überraschungen</span></div>`;
+      }).join("")}</div>
+      <h2 class="sec">🧺 Neues Kätzchen adoptieren</h2>
       <section class="shop-basket">
         <div class="bk">🧺</div>
-        <div><h2>Überraschungs-Körbchen</h2><p>Darin schläft ein neues Kätzchen!</p>
-        <button class="btn big" data-act="buybasket" ${s.fish < BASKET_PRICE || !left ? "disabled" : ""}>Öffnen · ${BASKET_PRICE} 🐟</button>
-        ${!left ? `<p class="small">Du hast alle Körbchen-Kätzchen! Die seltenen ⭐ bekommst du durch fleißiges Üben.</p>` :
-          s.fish < BASKET_PRICE ? `<p class="small">Noch ${BASKET_PRICE - s.fish} Fischlein – rechne weiter!</p>` : ""}</div>
-      </section>
-      ${giftBanner()}
-      <h2 class="sec">🎀 Zum Anziehen <small class="muted">${s.accessories.length} / ${ACCESSORIES.length}</small></h2>
-      <div class="chips shop-tabs">${[{ id: "all", emoji: "✨", name: "Alles" }].concat(SLOTS).map((sl) => `<button class="chip ${(S.shopTab || "all") === sl.id ? "on" : ""}" data-act="shoptab" data-k="${sl.id}">${sl.emoji} ${sl.name}</button>`).join("")}</div>
-      <div class="acc-shop">${ACCESSORIES.filter((a) => (S.shopTab || "all") === "all" || a.slot === S.shopTab).map((a) => {
-        const has = s.accessories.includes(a.id), fc = favCat();
-        if (a.surprise && !has) return `<div class="acc-card secret"><span class="ae">🎁</span><span>Geheim-Teil</span><span class="small muted">nur in Überraschungen</span></div>`;
-        return `<div class="acc-card ${has ? "has" : ""} ${a.surprise ? "rare" : ""}">${catSVG(fc.def, { acc: { [a.slot]: a.id }, cls: "cat-sm" })}<span>${a.emoji} ${a.name}</span>
-          ${has ? `<span class="badge">✔ gehört dir</span>` : `<button class="btn small" data-act="buyacc" data-id="${a.id}" ${s.fish < a.price ? "disabled" : ""}>${a.price} 🐟</button>`}</div>`;
-      }).join("")}</div></main>${bottomnav("shop")}`;
+        <div><p>Neue Kätzchen bekommst du für <b>Erfolge</b> 🏆 – oder du adoptierst eines.</p>
+        <button class="btn big" data-act="buybasket" ${s.fish < BASKET_PRICE || !left ? "disabled" : ""}>Adoptieren · ${BASKET_PRICE} 🐟</button>
+        ${!left ? `<p class="small">Alle Kätzchen wohnen schon bei dir! 🎉</p>` : s.fish < BASKET_PRICE ? `<p class="small">Noch ${BASKET_PRICE - s.fish} Fischlein.</p>` : ""}</div>
+      </section></main>${bottomnav("shop")}`;
   }
 
   function buyBasket() {
@@ -834,40 +1177,65 @@
     if (s.fish < BASKET_PRICE || !pool.length) return;
     s.fish -= BASKET_PRICE;
     const c = pick(pool);
-    s.cats.push({ id: c.id, acc: {} });
+    s.cats.push(newCat(c.id));
     saveState(); render(); revealCat(c.id, false);
   }
 
-  function buyAcc(id) {
-    const s = st(), a = ACCESSORIES.find((x) => x.id === id);
-    if (!a || s.fish < a.price || s.accessories.includes(id)) return;
-    s.fish -= a.price; s.accessories.push(id); sfx.coin();
-    const fav = s.cats.find((c) => c.id === s.fav) || s.cats[0];
-    if (fav) { fav.acc = fav.acc || {}; fav.acc[a.slot] = a.id; }
-    saveState(); render(); confetti();
-    toast(`${a.emoji} ${a.name} gekauft! ${fav ? Cats.byId(fav.id).name + " trägt es schon 😻" : ""}`, 3000);
+  function buyFood(id) {
+    const s = st(), f = FOOD.find((x) => x.id === id);
+    if (!f || s.fish < f.price) return;
+    s.fish -= f.price; s.food += f.food || 0; s.treats += f.treat || 0;
+    sfx.coin(); saveState(); render();
+    toast(f.treat ? "🍪 Leckerli gekauft!" : `🥫 ${f.food} Futter${f.food > 1 ? "dosen" : "dose"} gekauft! Füttere deine Kätzchen.`);
+  }
+
+  function buyItem(id) {
+    const s = st(), a = findItem(id);
+    if (!a || s.fish < a.price) return;
+    const lacking = s.cats.filter((c) => !hasItem(c, id));
+    if (!lacking.length) return;
+    if (lacking.length === 1) return assignItem(lacking[0].id, id);
+    showOverlay(`<h2>Für welches Kätzchen?</h2><p class="muted">${a.emoji} ${esc(a.name)} · ${a.price} 🐟</p>
+      <div class="pick-cats">${s.cats.map((c) => {
+        const has = hasItem(c, id), prev = a.slot ? Object.assign({}, c.acc, { [a.slot]: id }) : c.acc;
+        return `<button class="pick-cat" data-act="buyfor" data-id="${id}" data-cat="${c.id}" ${has ? "disabled" : ""}>${catImg(Object.assign({}, c, { acc: prev }), { cls: "cat-sm" })}
+          <span>${esc(Cats.byId(c.id).name)}${has ? " ✔" : ""}</span></button>`;
+      }).join("")}</div>
+      <button class="btn ghost" data-act="close">Abbrechen</button>`);
+  }
+
+  function assignItem(catId, id) {
+    const s = st(), a = findItem(id), c = s.cats.find((x) => x.id === catId);
+    if (!a || !c || hasItem(c, id) || s.fish < a.price) return;
+    s.fish -= a.price; c.items.push(id);
+    if (a.slot) { c.acc = c.acc || {}; c.acc[a.slot] = id; }
+    sfx.coin(); saveState(); hideOverlay(); render(); confetti();
+    toast(`${a.emoji} ${a.name} gehört jetzt ${Cats.byId(catId).name}! 😻`, 3000);
   }
 
   // ------------------------------------------------------------------ Eltern: PIN
   function pinDialog() {
-    let val = "";
-    const draw = () => {
-      showOverlay(`<h2>🔒 Elternbereich</h2><p class="muted">PIN eingeben${S.boot.pin_is_default ? " (Start-PIN: 1234 – bitte gleich ändern)" : ""}</p>
-        <div class="pin-dots">${[0, 1, 2, 3].map((i) => `<i class="${i < val.length ? "on" : ""}"></i>`).join("")}</div>
-        <div class="keypad small">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<button data-pin="${d}">${d}</button>`).join("")}
-        <button class="del" data-pin="close">✕</button><button data-pin="0">0</button><button class="del" data-pin="del">⌫</button></div>`);
-      $overlay.querySelectorAll("[data-pin]").forEach((b) => b.addEventListener("click", async () => {
-        const k = b.dataset.pin;
-        if (k === "close") return hideOverlay();
-        if (k === "del") val = val.slice(0, -1); else if (val.length < 4) val += k;
-        if (val.length === 4) {
-          try { await api("/api/admin/login", { json: { pin: val } }); S.pin = val; hideOverlay(); S.view = "parent"; await loadAdmin(); render(); return; }
-          catch (e) { toast("PIN falsch"); val = ""; }
-        }
-        draw();
-      }));
-    };
-    draw();
+    let val = "", busy = false;
+    showOverlay(`<h2>🔒 Elternbereich</h2><p class="muted">PIN eingeben${S.boot.pin_is_default ? " (Start-PIN: 1234 – bitte gleich ändern)" : ""}</p>
+      <div class="pin-dots"><i></i><i></i><i></i><i></i></div>
+      <div class="keypad small">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<button data-pin="${d}">${d}</button>`).join("")}
+      <button class="del" data-pin="close">✕</button><button data-pin="0">0</button><button class="del" data-pin="del">⌫</button></div>`);
+    const dots = () => $overlay.querySelectorAll(".pin-dots i").forEach((d, i) => d.classList.toggle("on", i < val.length));
+    $overlay.querySelectorAll("[data-pin]").forEach((b) => b.addEventListener("click", async () => {
+      if (busy) return;
+      const k = b.dataset.pin;
+      if (k === "close") return hideOverlay();
+      if (k === "del") val = val.slice(0, -1); else if (val.length < 4) val += k;
+      dots();
+      if (val.length < 4) return;
+      busy = true;
+      try { await api("/api/admin/login", { json: { pin: val } }); S.pin = val; hideOverlay(); S.view = "parent"; await loadAdmin(); render(); }
+      catch (e) {
+        toast("PIN falsch"); val = ""; dots();
+        const pd = $overlay.querySelector(".pin-dots"); if (pd) { pd.classList.add("shake"); setTimeout(() => pd.classList.remove("shake"), 450); }
+      }
+      busy = false;
+    }));
   }
 
   async function askPinAgain() { S.view = "parent"; await loadAdmin(); render(); }
@@ -1312,7 +1680,14 @@
         case "nav":
           if (d.v === "parent") { if (S.pin) { S.view = "parent"; await loadAdmin(); render(); } else pinDialog(); break; }
           S.view = d.v; render(); break;
-        case "petfav": { sfx.purr(); const fc = favCat(); el.innerHTML = catSVG(fc.def, { mood: "joy", acc: fc.acc, cls: "cat-lg jump" }); setTimeout(() => S.view === "home" && render(), 1200); break; }
+        case "petfav": { const fc = favCat(); if (!fc.cat) break; catTap(fc.cat.id); el.innerHTML = catImg(fc.cat, { mood: "joy", cls: "cat-lg jump" }); setTimeout(() => S.view === "home" && !document.querySelector("#overlay:not(.hidden)") && render(), 1400); break; }
+        case "feed": feedCat(d.id) && (checkAchievements(), openCat(d.id)); break;
+        case "feedall": feedAll(); break;
+        case "brush": brushCat(d.id); break;
+        case "treat": treatCat(d.id); break;
+        case "buyfood": buyFood(d.id); break;
+        case "buyitem": buyItem(d.id); break;
+        case "buyfor": assignItem(d.cat, d.id); break;
         case "pickmod": levelPicker("module", d.key); break;
         case "pickmix": levelPicker("mix"); break;
         case "startlevel": hideOverlay(); startGame(d.kind === "mix" ? { kind: "mix", level: Number(d.lv) } : { kind: "module", key: d.key, level: Number(d.lv) }); break;
@@ -1341,7 +1716,6 @@
         case "opengift": openGift(); break;
         case "setfav": st().fav = d.id; saveState(); openCat(d.id); render(); break;
         case "buybasket": buyBasket(); break;
-        case "buyacc": buyAcc(d.id); break;
         // Eltern
         case "leaveparent": S.view = S.profile ? "home" : "profiles"; S.pin = null; await refreshBoot(); render(); break;
         case "ptab": S.parentTab = d.k; renderParent(); break;
