@@ -102,6 +102,7 @@
 
   function speakable(t) {
     let s = t.prompt || "";
+    if (t.type === "figure") return s;
     if (t.expr) {
       const e = t.expr.replace(/\?/g, t.type === "compare" ? " Zeichen " : " wie viel ").replace(/\+/g, " plus ").replace(/(\d)\s*-\s*(\d)/g, "$1 minus $2")
         .replace(/ - /g, " minus ").replace(/=/g, " ist ").replace(/·/g, " mal ").replace(/:/g, " geteilt durch ").replace(/ c\b/g, " Cent").replace(/€/g, " Euro");
@@ -126,7 +127,7 @@
     s.retry = s.retry || []; s.streak = s.streak || 0; s.best_streak = s.best_streak || 0; s.total_correct = s.total_correct || 0;
     s.packstars = s.packstars || 0; s.fixed_total = s.fixed_total || 0; s.packStats = s.packStats || {};
     s.giftQueue = s.giftQueue || []; s.milestones = s.milestones || []; s.rounds = s.rounds || 0; s.boost = s.boost || 0;
-    s.food = s.food ?? 0; s.treats = s.treats || 0; s.playDays = s.playDays || []; s.achieved = s.achieved || [];
+    s.food = s.food ?? 0; s.treats = s.treats || 0; s.sardines = s.sardines || 0; s.playDays = s.playDays || []; s.achieved = s.achieved || [];
     s.perfectL3 = s.perfectL3 || 0; s.grade1 = s.grade1 || 0; s.careWeeks = s.careWeeks || 0; s.careStreak = s.careStreak || 0;
     s.cats.forEach((c) => {
       if (typeof c.acc === "string") { const a = ACCESSORIES.find((x) => x.id === c.acc); c.acc = a ? { [a.slot]: a.id } : {}; }
@@ -406,7 +407,44 @@
     if (t.money && t.money.length) return `<div class="visual">${V.moneyHTML(t.money)}</div>`;
     if (t.type === "numberline" && t.numberline) return `<div class="visual">${V.numberlineSVG(t.numberline.min, t.numberline.max, t.numberline.marker)}</div>`;
     if (t.type === "blocks" && t.blocks) return `<div class="visual">${V.blocksSVG(t.blocks.tens, t.blocks.ones)}</div>`;
+    const v = t.visual;
+    if (v && v.kind === "dots") return `<div class="visual">${V.dotsSVG(v.rows, v.cols)}</div>`;
+    if (v && v.kind === "ruler") return `<div class="visual">${V.rulerSVG(v.len, v.max, v.item)}</div>`;
+    if (v && v.kind === "shape") return `<div class="visual">${V.shapeSVG(v.name)}</div>`;
+    if (v && v.kind === "body") return `<div class="visual">${V.bodySVG(v.name)}</div>`;
+    if (v && v.kind === "sym") return `<div class="visual">${V.symSVG(v.sym, v.k || 0)}</div>`;
     return "";
+  }
+
+  // ------------------------------------------------------------------ Figuren (Dreieck, Mauer, Haus, Familie, Tabelle, Päckchen)
+  function figState(g, t) {
+    if (!g.fig || g.fig.idx !== g.idx) {
+      const bl = Figures.blanks(t.figure);
+      g.fig = { idx: g.idx, inputs: t.figure.cells.map((c) => (c.given ? String(c.v) : "")), active: bl[0] ?? null, wrong: [], solved: false, reveal: false, fresh: true };
+    }
+    return g.fig;
+  }
+  const figFilled = (t, fs) => Figures.blanks(t.figure).every((i) => fs.inputs[i] !== "");
+  const figGiven = (t, fs) => Figures.blanks(t.figure).map((i) => fs.inputs[i] || "_").join(",");
+  function figKey(k) {
+    const g = S.game; if (!g || g.locked) return;
+    const t = g.tasks[g.idx]; if (t.type !== "figure") return;
+    const fs = figState(g, t), bl = Figures.blanks(t.figure);
+    if (k === "ok") { if (figFilled(t, fs)) submit(figGiven(t, fs)); return; }
+    if (k === "next") {
+      const order = bl.filter((i) => i !== fs.active);
+      const after = bl.filter((i) => i > (fs.active ?? -1));
+      fs.active = (after.find((i) => fs.inputs[i] === "") ?? bl.find((i) => fs.inputs[i] === "") ?? after[0] ?? order[0] ?? fs.active);
+      fs.fresh = true;
+    } else if (fs.active !== null && fs.active !== undefined) {
+      // neu angetipptes Feld: die erste Ziffer ersetzt den alten Wert
+      const cur = fs.fresh && k !== "del" ? "" : fs.inputs[fs.active] || "";
+      fs.fresh = false;
+      if (k === "del") fs.inputs[fs.active] = cur.slice(0, -1);
+      else if (cur.length < 3) fs.inputs[fs.active] = (cur === "0" ? "" : cur) + k;
+      fs.wrong = fs.wrong.filter((i) => i !== fs.active);
+    }
+    sfx.tap(); render();
   }
 
   const usesKeypad = (t) => !(t.type === "compare" || t.type === "clock" || t.type === "choice" || (t.choices && t.choices.length >= 2));
@@ -426,7 +464,13 @@
     const fc = favCat();
     const paws = g.tasks.map((_, i) => `<i class="${i < g.idx ? (g.mode.test ? "done" : g.results[i] && g.results[i].first_try ? "ok" : "meh") : i === g.idx ? "now" : ""}"></i>`).join("");
     let answer = "";
-    if (usesKeypad(t)) {
+    const isFig = t.type === "figure", fs = isFig ? figState(g, t) : null;
+    if (isFig) {
+      answer = `<div class="keypad fig-pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<button data-act="fkey" data-k="${d}">${d}</button>`).join("")}
+        <button class="del" data-act="fkey" data-k="del" aria-label="Löschen">⌫</button><button data-act="fkey" data-k="0">0</button>
+        <button class="next" data-act="fkey" data-k="next" aria-label="Nächstes Feld">➜</button></div>
+        <button class="btn big fig-check" data-act="fkey" data-k="ok" ${figFilled(t, fs) && !g.locked ? "" : "disabled"}>✔ Prüfen</button>`;
+    } else if (usesKeypad(t)) {
       answer = `<div class="keypad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => `<button data-act="key" data-k="${d}">${d}</button>`).join("")}
         <button class="del" data-act="key" data-k="del" aria-label="Löschen">⌫</button><button data-act="key" data-k="0">0</button>
         <button class="ok" data-act="key" data-k="ok" ${g.input ? "" : "disabled"}>✔</button></div>`;
@@ -437,7 +481,7 @@
         class="${g.wrongChoices.includes(c) ? "wrong" : ""} ${g.feedback === "ok" && c === t.answer ? "right" : ""}" ${g.wrongChoices.includes(c) || g.locked ? "disabled" : ""}>
         <b>${esc(c)}</b>${t.type === "compare" ? `<small>${label[c]}</small>` : ""}</button>`).join("")}</div>`;
     }
-    const solution = g.feedback === "solution" ? `<div class="solution"><div>Richtig ist: <b>${esc(t.answer)}${t.unit && usesKeypad(t) ? " " + esc(t.unit) : ""}</b></div>
+    const solution = g.feedback === "solution" ? `<div class="solution">${isFig ? "<div>So ist es richtig – schau dir die Zahlen oben an:</div>" : `<div>Richtig ist: <b>${esc(t.answer)}${t.unit && usesKeypad(t) ? " " + esc(t.unit) : ""}</b></div>`}
       ${t.explain ? `<div class="explain">${esc(t.explain)}</div>` : ""}<button class="btn big" data-act="next">Weiter ➜</button></div>` : "";
     $app.innerHTML = `<div class="screen game">
       <header class="game-top"><button class="x" data-act="quit" aria-label="Beenden">✕</button>
@@ -448,7 +492,7 @@
         ${t.golden ? `<div class="golden-badge">⭐ Goldene Aufgabe – dreifach Fischlein!</div>` : ""}
         <div class="prompt"><span>${esc(t.prompt)}</span><button class="say" data-act="say" aria-label="Vorlesen">🔊</button></div>
         ${t.fromRetry ? `<div class="lastwrong">🔧 Fehler-Werkstatt${t.lastWrong ? ` · letztes Mal: <s>${esc(t.lastWrong)}</s>` : ""}</div>` : ""}
-        ${gameVisual(t)}${exprHTML(t, g)}
+        ${isFig ? Figures.html(t, fs) : gameVisual(t) + exprHTML(t, g)}
         ${g.feedback === "hint" && t.hint ? `<div class="hint">💡 ${esc(t.hint)}</div>` : ""}
       </section>
       ${solution || answer}
@@ -468,8 +512,12 @@
   function submit(given) {
     const g = S.game, t = g.tasks[g.idx];
     if (g.locked) return;
+    const isFig = t.type === "figure";
+    const figWrong = isFig ? Figures.check(t.figure, figState(g, t).inputs) : null;
+    const correct = isFig ? figWrong.length === 0 : isCorrect(t, given);
     if (g.mode.test) {
-      const ok = isCorrect(t, given);
+      const ok = correct;
+      // Im Test wird nicht verraten, welche Felder stimmen
       g.locked = true; g.feedback = "saved"; g.mood = "happy";
       g.testLog.push({ t, given, ok });
       record(t, ok, ok, given);
@@ -479,12 +527,14 @@
       setTimeout(() => nextTask(g), 650);
       return;
     }
-    if (isCorrect(t, given)) {
+    if (correct) {
       const first = g.tries === 0;
+      if (isFig) { g.fig.solved = true; g.fig.wrong = []; }
       g.locked = true; g.feedback = "ok"; g.mood = "joy";
       g.combo = first ? g.combo + 1 : 0;
       let earned = first ? (t.fromRetry ? FIX_FISH : (g.mode.level ? LEVEL_FISH[g.mode.level] : PACK_FISH)) : 0;
       if (first && g.combo > 0 && g.combo % 5 === 0) { earned += 2; }
+      if (first && isFig) earned *= 2;      // Figuren sind mehr Arbeit
       if (first && t.golden) earned *= 3;
       if (g.boost) earned *= 2;
       g.fish += earned;
@@ -502,6 +552,7 @@
     g.tries++; g.shake = true; g.combo = 0; sfx.bad();
     if (g.tries === 1) {
       g.feedback = "hint"; g.mood = "wow"; g.input = ""; g.firstWrong = given;
+      if (isFig) { g.fig.wrong = figWrong; figWrong.forEach((i) => { g.fig.inputs[i] = ""; }); g.fig.active = figWrong[0]; g.fig.fresh = true; }
       addRetry(t, given);
       if (!usesKeypad(t)) g.wrongChoices.push(given);
       g.bubble = pick(["Fast! Versuch es nochmal.", "Hmm, schau nochmal genau.", "Nicht ganz – du schaffst das!"]);
@@ -509,6 +560,7 @@
       if (S.boot.settings.tts_auto && t.hint) speak(t.hint);
     } else {
       g.feedback = "solution"; g.mood = "happy"; g.locked = true;
+      if (isFig) { g.fig.reveal = true; g.fig.wrong = []; }
       g.bubble = "Macht nichts! So geht's:";
       record(t, false, false, given);
       render();
@@ -528,7 +580,7 @@
     if (g.mode.trial) return;
     if (t.pack && !t.fromRetry) {
       const ps = pstat(t.pack), k = sig(t);
-      const label = t.type === "clock" ? `Uhr ${t.clock.h}:${String(t.clock.m).padStart(2, "0")}` : t.type === "money" ? `${t.prompt} (${t.answer} ${t.unit || ""})` : (t.expr || t.prompt);
+      const label = t.type === "figure" ? `${t.prompt} (${Figures.solutionText(t.figure)})` : t.type === "clock" ? `Uhr ${t.clock.h}:${String(t.clock.m).padStart(2, "0")}` : t.type === "money" ? `${t.prompt} (${t.answer} ${t.unit || ""})` : (t.expr || t.prompt);
       const ts = ps.tasks[k] || (ps.tasks[k] = { label, r: 0, w: 0 });
       if (first) ts.r++; else ts.w++;
     }
@@ -547,7 +599,7 @@
       correct, first_try: first, question: [t.prompt, t.expr].filter(Boolean).join(" "), answer: t.answer, given: g.firstWrong ?? given }] } }).catch(() => {});
   }
 
-  const sig = (t) => [t.type, t.prompt, t.expr, t.answer, JSON.stringify(t.clock || t.money || t.numberline || t.blocks || "")].join("|");
+  const sig = (t) => [t.type, t.prompt, t.expr, t.answer, JSON.stringify(t.clock || t.money || t.numberline || t.blocks || t.figure || t.visual || "")].join("|");
   function addRetry(t, given) {
     const s = st();
     if (S.game && S.game.mode.trial) return;
@@ -742,7 +794,7 @@
     const wear = SLOTS.map((sl) => ({ sl, items: ACCESSORIES.filter((a) => a.slot === sl.id && o.items.includes(a.id)) })).filter((x) => x.items.length);
     const home = HOME_ITEMS.filter((h) => o.items.includes(h.id));
     showOverlay(`<div class="cat-detail">
-      <div class="cat-scene">${hasItem(o, "tree") ? `<span class="scene-tree">${TREE_SVG}</span>` : ""}${hasItem(o, "bed") ? `<span class="scene-bed">${BED_SVG}</span>` : ""}
+      <div class="cat-scene">${hasItem(o, "tree") ? `<span class="scene-tree">${TREE_SVG}</span>` : ""}${hasItem(o, "hut") ? `<span class="scene-hut">${HUT_SVG}</span>` : ""}${hasItem(o, "bed") ? `<span class="scene-bed">${BED_SVG}</span>` : ""}
         <button class="pet" data-act="pet" data-id="${id}">${catImg(o, { cls: "cat-xl" })}</button></div>
       <h2>${esc(c.name)}${c.rare ? " ⭐" : ""}</h2>
       <p class="stage">${stg.name}${stg.stars ? " " + "⭐".repeat(stg.stars) : ""} · ${heartsHTML(o)}</p>
@@ -750,6 +802,7 @@
       <p class="status">${statusLine(o)}</p>
       <div class="care-row">
         <button class="care ${n.fedToday ? "done" : n.hunger ? "need" : ""}" data-act="feed" data-id="${id}"><span>🍽️</span><small>${n.fedToday ? "satt" : "Füttern"}</small><em>🥫 ${s.food}</em></button>
+        <button class="care ${n.fedToday ? "done" : ""}" data-act="sardine" data-id="${id}"><span>🐟</span><small>Sardinen</small><em>${s.sardines}</em></button>
         <button class="care ${n.brushedToday ? "done" : n.messy ? "need" : ""}" data-act="brush" data-id="${id}"><span>🪮</span><small>${hasItem(o, "brush") ? (n.brushedToday ? "gebürstet" : "Bürsten") : "keine Bürste"}</small></button>
         <button class="care" data-act="treat" data-id="${id}"><span>🍪</span><small>Leckerli</small><em>${s.treats}</em></button>
       </div>
@@ -792,17 +845,22 @@
     { id: "food", name: "Futterdose", emoji: "🥫", price: 3, food: 1, desc: "1 Mahlzeit für 1 Kätzchen" },
     { id: "foodpack", name: "Vorratspaket", emoji: "📦", price: 13, food: 5, desc: "5 Futterdosen – 2 🐟 gespart" },
     { id: "treat", name: "Leckerli", emoji: "🍪", price: 2, treat: 1, desc: "+1 ❤️ für ein Kätzchen" },
+    { id: "sardines", name: "Sardinen", emoji: "🐟", price: 5, sardine: 1, desc: "Festmahl: macht satt und +1 ❤️" },
   ];
   const HOME_ITEMS = [
     { id: "brush", name: "Bürste", emoji: "🪮", price: 10, desc: "Damit bürstest du dein Kätzchen (alle paar Tage)" },
     { id: "tree", name: "Kratzbaum", emoji: "🌳", price: 25, desc: "Spielen! Die Laune sinkt nur halb so schnell" },
     { id: "bed", name: "Schlafkörbchen", emoji: "🛏️", price: 20, desc: "Gut geschlafen wächst man doppelt so schnell" },
+    { id: "hut", name: "Katzenhütte", emoji: "🏡", price: 25, desc: "Gemütliches Zuhause: jeden Montag +1 ❤️" },
   ];
   const TREE_SVG = `<svg viewBox="0 0 60 130" class="tree-svg"><rect x="26" y="18" width="9" height="100" fill="#d6b48a" stroke="#a16207"/>
     <rect x="6" y="114" width="48" height="12" rx="5" fill="#a78bfa"/><rect x="2" y="60" width="36" height="9" rx="4" fill="#a78bfa"/>
     <rect x="22" y="10" width="36" height="9" rx="4" fill="#a78bfa"/><path d="M50 19 L50 34" stroke="#9ca3af" stroke-width="1.5"/><circle cx="50" cy="38" r="5" fill="#f472b6"/></svg>`;
   const BED_SVG = `<svg viewBox="0 0 200 54" class="bed-svg"><ellipse cx="100" cy="32" rx="97" ry="20" fill="#b45309"/>
     <ellipse cx="100" cy="25" rx="85" ry="13" fill="#f9a8d4"/><path d="M6 30 Q100 66 194 30" stroke="#92400e" stroke-width="4" fill="none"/></svg>`;
+  const HUT_SVG = `<svg viewBox="0 0 90 90" class="hut-svg"><polygon points="45,4 86,40 4,40" fill="#ef4444" stroke="#991b1b" stroke-width="2"/>
+    <rect x="12" y="38" width="66" height="48" fill="#fde68a" stroke="#b45309" stroke-width="2"/><path d="M33 86 L33 64 Q45 50 57 64 L57 86 Z" fill="#7c2d12"/>
+    <circle cx="62" cy="52" r="5" fill="#93c5fd" stroke="#1d4ed8"/><text x="45" y="34" text-anchor="middle" font-size="12">🐾</text></svg>`;
   const STAGES = [{ min: 0, name: "Baby", cls: "stage-baby" }, { min: 8, name: "Jungkatze", cls: "stage-young" }, { min: 25, name: "Große Katze", cls: "stage-big" }];
 
   const D = (iso) => { const [y, m, d] = String(iso).split("-").map(Number); return new Date(y, m - 1, d, 12); };
@@ -862,6 +920,14 @@
       changed = true;
     }
     if (changed) { s.joyCheck = yesterday(); saveState(); }
+    const mon = now(); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7)); const monIso = isoDay(mon);
+    if (s.hutWeek !== monIso) {
+      s.hutWeek = monIso;
+      const cats = s.cats.filter((c) => hasItem(c, "hut"));
+      cats.forEach((c) => { c.hearts = Math.min(5, c.hearts + 1); });
+      saveState();
+      if (cats.length) setTimeout(() => toast(`🏡 Neue Woche! ${cats.length === 1 ? Cats.byId(cats[0].id).name + " fühlt" : cats.length + " Kätzchen fühlen"} sich in der Hütte pudelwohl: +1 ❤️`, 3500), 800);
+    }
   }
   function joyAfterRound(rate) {
     const s = st(), plus = rate >= 0.9 ? 2 : 1;
@@ -876,24 +942,33 @@
     s.careLast = today();
     if (s.careStreak >= 5) { s.careWeeks++; s.careStreak = 0; }
   }
-  function feedCat(id, quiet) {
+  function feedCat(id, quiet, sardine) {
     const s = st(), c = s.cats.find((x) => x.id === id); if (!c) return false;
     const n = needs(c), name = Cats.byId(id).name;
     if (n.fedToday) { if (!quiet) toast(`${name} ist schon satt 😊`); return false; }
-    if (s.food < 1) { if (!quiet) toast("Kein Futter mehr – im Laden gibt es Futterdosen 🥫"); return false; }
-    s.food--; c.fed = today();
+    if (sardine) {
+      if (s.sardines < 1) { if (!quiet) toast("Keine Sardinen mehr – im Laden gibt es welche 🐟"); return false; }
+      s.sardines--; c.hearts = Math.min(5, c.hearts + 1);
+    } else {
+      if (s.food < 1) { if (!quiet) toast("Kein Futter mehr – im Laden gibt es Futterdosen 🥫"); return false; }
+      s.food--;
+    }
+    c.fed = today();
     const before = stageOf(c);
     if (c.hearts >= 3 && !n.messy && c.lastGrow !== today()) { c.growth = (c.growth || 0) + 1 + (hasItem(c, "bed") ? 1 : 0); c.lastGrow = today(); }
     const after = stageOf(c);
     careCheck(); saveState();
     if (before.name !== after.name || before.stars !== after.stars) celebrateGrowth(c);
-    else if (!quiet) { meow(1.15); toast(`🍽️ ${name}: Mmmh, lecker! Danke!`); setTimeout(() => speak("Mmmh, lecker! Danke!"), 600); }
+    else if (!quiet) { meow(1.15); toast(sardine ? `🐟 Ein Festmahl für ${name}! +1 ❤️` : `🍽️ ${name}: Mmmh, lecker! Danke!`); setTimeout(() => speak(sardine ? "Sardinen! Mein Lieblingsessen!" : "Mmmh, lecker! Danke!"), 600); }
     return true;
   }
   function feedAll() {
     const s = st(); let fed = 0;
-    for (const c of s.cats) { if (needs(c).hunger >= 1 && s.food > 0 && feedCat(c.id, true)) fed++; }
-    if (!fed) { toast(s.food < 1 ? "Kein Futter mehr – im Laden gibt es Futterdosen 🥫" : "Alle Kätzchen sind satt 😊"); return; }
+    for (const c of s.cats) {
+      if (needs(c).hunger < 1) continue;
+      if ((s.food > 0 && feedCat(c.id, true)) || (s.sardines > 0 && feedCat(c.id, true, true))) fed++;
+    }
+    if (!fed) { toast(s.food + s.sardines < 1 ? "Kein Futter mehr – im Laden gibt es Futterdosen 🥫" : "Alle Kätzchen sind satt 😊"); return; }
     meow(1.1); toast(`🍽️ ${fed} ${fed === 1 ? "Kätzchen" : "Kätzchen"} gefüttert – mmmh, lecker!`); setTimeout(() => speak("Mmmh, lecker! Danke!"), 600);
     checkAchievements(); render();
   }
@@ -946,14 +1021,14 @@
     const extra = [messy.length ? `🪮 ${messy.length} zerzaust` : "", sad.length ? `😢 ${sad.length} traurig – rechne eine Runde!` : ""].filter(Boolean).join(" · ");
     return `<section class="care-card ${hungry.length ? "alert" : ""}">
       <div class="cc-cats">${s.cats.slice(0, 6).map((c) => `<span class="cc-cat" data-act="opencat" data-id="${c.id}">${catImg(c, { cls: "cat-xs2" })}<i>${statusIcon(c)}</i></span>`).join("")}${s.cats.length > 6 ? `<span class="cc-more">+${s.cats.length - 6}</span>` : ""}</div>
-      <div class="cc-text">${msg}${extra ? `<small>${extra}</small>` : ""}<small>🥫 Futter: ${s.food} · 🍪 Leckerli: ${s.treats}</small></div>
-      ${hungry.length ? (s.food ? `<button class="btn small" data-act="feedall">🍽️ Füttern</button>` : `<button class="btn small" data-act="nav" data-v="shop">🛒 Futter</button>`) : ""}</section>`;
+      <div class="cc-text">${msg}${extra ? `<small>${extra}</small>` : ""}<small>🥫 Futter: ${s.food}${s.sardines ? ` · 🐟 Sardinen: ${s.sardines}` : ""} · 🍪 Leckerli: ${s.treats}</small></div>
+      ${hungry.length ? (s.food + s.sardines ? `<button class="btn small" data-act="feedall">🍽️ Füttern</button>` : `<button class="btn small" data-act="nav" data-v="shop">🛒 Futter</button>`) : ""}</section>`;
   }
   function careReminder() {
     const s = st(), hungry = s.cats.filter((c) => needs(c).hunger >= 1).length;
     if (!hungry) return "";
     return `<div class="care-remind">🍽️ ${hungry === 1 ? "Ein Kätzchen hat" : hungry + " Kätzchen haben"} Hunger!
-      ${s.food ? `<button class="btn small" data-act="feedall">Jetzt füttern</button>` : `<button class="btn small" data-act="nav" data-v="shop">Futter kaufen</button>`}</div>`;
+      ${s.food + s.sardines ? `<button class="btn small" data-act="feedall">Jetzt füttern</button>` : `<button class="btn small" data-act="nav" data-v="shop">Futter kaufen</button>`}</div>`;
   }
 
   // ------------------------------------------------------------------ Erfolge (neue Kätzchen nur für Leistung)
@@ -1147,7 +1222,7 @@
       <h1 class="title">Laden</h1>
       ${giftBanner()}
       <h2 class="sec">🍽️ Futter &amp; Leckerli</h2>
-      <p class="stock">Vorrat: <b>🥫 ${s.food} Futterdosen</b> · <b>🍪 ${s.treats} Leckerli</b> · ${s.cats.length} ${s.cats.length === 1 ? "Kätzchen braucht" : "Kätzchen brauchen"} pro Schultag ${s.cats.length} ${s.cats.length === 1 ? "Dose" : "Dosen"}</p>
+      <p class="stock">Vorrat: <b>🥫 ${s.food} Futterdosen</b> · <b>🐟 ${s.sardines} Sardinen</b> · <b>🍪 ${s.treats} Leckerli</b> · ${s.cats.length} ${s.cats.length === 1 ? "Kätzchen braucht" : "Kätzchen brauchen"} pro Schultag ${s.cats.length} ${s.cats.length === 1 ? "Dose" : "Dosen"}</p>
       <div class="acc-shop food-shop">${FOOD.map((f) => `<div class="acc-card food"><span class="ae">${f.emoji}</span><span>${f.name}</span><small class="muted">${f.desc}</small>
         <button class="btn small" data-act="buyfood" data-id="${f.id}" ${s.fish < f.price ? "disabled" : ""}>${f.price} 🐟</button></div>`).join("")}</div>
       ${ev ? `<h2 class="sec">${ev.emoji} ${ev.name} – nur jetzt!</h2><div class="acc-shop">${evItems.map((a) => shopCard(a, { tag: "Nur jetzt" })).join("")}</div>`
@@ -1184,9 +1259,9 @@
   function buyFood(id) {
     const s = st(), f = FOOD.find((x) => x.id === id);
     if (!f || s.fish < f.price) return;
-    s.fish -= f.price; s.food += f.food || 0; s.treats += f.treat || 0;
+    s.fish -= f.price; s.food += f.food || 0; s.treats += f.treat || 0; s.sardines += f.sardine || 0;
     sfx.coin(); saveState(); render();
-    toast(f.treat ? "🍪 Leckerli gekauft!" : `🥫 ${f.food} Futter${f.food > 1 ? "dosen" : "dose"} gekauft! Füttere deine Kätzchen.`);
+    toast(f.sardine ? "🐟 Sardinen gekauft – ein Festmahl für ein Kätzchen!" : f.treat ? "🍪 Leckerli gekauft!" : `🥫 ${f.food} Futter${f.food > 1 ? "dosen" : "dose"} gekauft! Füttere deine Kätzchen.`);
   }
 
   function buyItem(id) {
@@ -1402,7 +1477,9 @@
   }
 
   function taskPreview(t, i) {
-    const icon = { input: "⌨️", choice: "🔘", compare: "⚖️", clock: "🕒", money: "💶", numberline: "📏", blocks: "🧱" }[t.type] || "•";
+    const icon = { input: "⌨️", choice: "🔘", compare: "⚖️", clock: "🕒", money: "💶", numberline: "📏", blocks: "🧱", figure: "🧩" }[t.type] || "•";
+    if (t.type === "figure") return `<li class="tp"><span class="ti">${icon}</span><div class="tb"><div>${esc(t.prompt)}</div>
+      <div class="small muted">Lösung: <b>${esc(Figures.solutionText(t.figure))}</b></div></div><button class="x" data-act="rmtask" data-i="${i}" title="Aufgabe entfernen">🗑</button></li>`;
     let vis = "";
     if (t.type === "clock" && t.clock) vis = `<span class="mini">${V.clockSVG(t.clock.h, t.clock.m)}</span>`;
     if (t.money && t.money.length) vis = `<span class="mini wide">${V.moneyHTML(t.money)}</span>`;
@@ -1683,6 +1760,7 @@
         case "petfav": { const fc = favCat(); if (!fc.cat) break; catTap(fc.cat.id); el.innerHTML = catImg(fc.cat, { mood: "joy", cls: "cat-lg jump" }); setTimeout(() => S.view === "home" && !document.querySelector("#overlay:not(.hidden)") && render(), 1400); break; }
         case "feed": feedCat(d.id) && (checkAchievements(), openCat(d.id)); break;
         case "feedall": feedAll(); break;
+        case "sardine": feedCat(d.id, false, true) && (checkAchievements(), openCat(d.id)); break;
         case "brush": brushCat(d.id); break;
         case "treat": treatCat(d.id); break;
         case "buyfood": buyFood(d.id); break;
@@ -1704,6 +1782,8 @@
           sfx.tap(); render(); break;
         }
         case "choice": submit(d.c); break;
+        case "fcell": { const g = S.game; if (g && g.fig && !g.locked) { g.fig.active = Number(d.i); g.fig.fresh = true; sfx.tap(); render(); } break; }
+        case "fkey": figKey(d.k); break;
         case "next": nextTask(); break;
         case "quit":
           if (S.game.mode.trial) { S.game = null; askPinAgain(); break; }
@@ -1819,6 +1899,11 @@
     if (S.view !== "game" || !S.game || ev.target.tagName === "INPUT") return;
     const t = S.game.tasks[S.game.idx];
     if (S.game.feedback === "solution" && ev.key === "Enter") return nextTask();
+    if (t.type === "figure") {
+      if (/^\d$/.test(ev.key)) figKey(ev.key); else if (ev.key === "Backspace") figKey("del");
+      else if (ev.key === "Enter") figKey("ok"); else if (ev.key === "Tab" || ev.key === "ArrowRight") { ev.preventDefault(); figKey("next"); }
+      return;
+    }
     if (!usesKeypad(t)) return;
     const g = S.game; if (g.locked) return;
     if (/^\d$/.test(ev.key) && g.input.length < 4) { g.input = (g.input === "0" ? "" : g.input) + ev.key; render(); }

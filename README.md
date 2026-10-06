@@ -3,8 +3,10 @@
 Spielerisch Mathe üben für die **2. Klasse Volksschule (Österreich)** – Kätzchen sammeln mit Fischlein 🐟.
 Reine Web-App (PWA) ohne Server: läuft auf GitHub Pages, wird am Handy installiert und funktioniert offline.
 
-- **Kind (Kalea):** Zahlen bis 100, Plus, Minus, Ergänzen, Geld, Uhr („viertel/halb/dreiviertel“), Zeit & Kalender,
-  Rechengeschichten – je 3 Stufen, Vorlesen, Kätzchen-Sammlung, Laden mit Accessoires.
+- **Kind (Kalea):** Lehrplan 2. Klasse (Österreich) in 14 Bereichen mit je 3 Levels: Zahlen bis 100, Plus, Minus,
+  Ergänzen, Rechenrätsel (Rechendreiecke, Zahlenmauern, Zahlenhäuser, Zahlenfamilien, „Die kleine Aufgabe hilft“),
+  Verdoppeln & Halbieren, Einmaleins & Teilen, Geld, Uhr, Zeit & Kalender, Längen, Formen & Körper, Zahlenfolgen,
+  Rechengeschichten. Kätzchen-Leben (Futter, Pflege, Herzen, Wachsen), Laden, Erfolge, Jahreszeiten.
 - **Eltern (🔒 PIN, Start 1234):** Fortschritt, Lernzettel fotografieren → Claude baut ein Lernpaket,
   KI-Pakete erstellen, Pakete prüfen/freischalten, Einstellungen, Sicherung.
 

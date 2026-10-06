@@ -92,5 +92,68 @@
     return `<svg class="vis-blocks" viewBox="0 0 ${Math.max(width, 60)} ${10 * u + 8}" role="img" aria-label="Zehner und Einer">${parts.join("")}</svg>`;
   }
 
-  window.Visuals = { clockSVG, moneyHTML, numberlineSVG, blocksSVG, coinSVG };
+  // Punktefeld fürs Einmaleins: rows Reihen mit je cols Punkten (5er-Lücke wie im Buch)
+  function dotsSVG(rows, cols) {
+    const d = 22, gap = 8, parts = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const x = 14 + c * d + (c >= 5 ? gap : 0), y = 14 + r * d + (r >= 5 ? gap : 0);
+      parts.push(`<circle cx="${x}" cy="${y}" r="8" fill="${r % 2 ? "#f472b6" : "#60a5fa"}"/>`);
+    }
+    const w = 28 + (cols - 1) * d + (cols > 5 ? gap : 0), h = 28 + (rows - 1) * d + (rows > 5 ? gap : 0);
+    return `<svg class="vis-dots" viewBox="0 0 ${w} ${h}" style="width:${Math.min(300, w * 1.1)}px" role="img" aria-label="Punktefeld">${parts.join("")}</svg>`;
+  }
+
+  // Lineal 0..max cm mit Gegenstand der Länge len
+  function rulerSVG(len, max, item) {
+    const u = 300 / max, parts = [];
+    for (let i = 0; i <= max; i++) {
+      const x = 10 + i * u;
+      parts.push(`<line x1="${x}" y1="58" x2="${x}" y2="${i % 5 === 0 ? 74 : 68}" stroke="#4a3f5c" stroke-width="${i % 5 === 0 ? 1.6 : 1}"/>`);
+      if (max <= 20 || i % 5 === 0) parts.push(`<text x="${x}" y="88" text-anchor="middle" font-size="${max <= 15 ? 11 : 9}" font-weight="700" fill="#3b3150">${i}</text>`);
+    }
+    const w = len * u;
+    const obj = item === "band"
+      ? `<rect x="10" y="22" width="${w}" height="16" rx="4" fill="#f472b6"/>`
+      : `<rect x="10" y="22" width="${Math.max(0, w - 16)}" height="16" rx="3" fill="#facc15" stroke="#ca8a04"/><polygon points="${10 + w - 16},22 ${10 + w},30 ${10 + w - 16},38" fill="#fcd34d" stroke="#ca8a04"/>
+         <polygon points="${10 + w - 5},27 ${10 + w},30 ${10 + w - 5},33" fill="#1f2937"/><rect x="10" y="22" width="8" height="16" fill="#f9a8d4"/>`;
+    return `<svg class="vis-ruler" viewBox="0 0 320 96" role="img" aria-label="Lineal">${obj}
+      <rect x="4" y="50" width="${312}" height="44" rx="4" fill="#fef9c3" stroke="#ca8a04" opacity="0.9"/>${parts.join("")}
+      <line x1="10" y1="18" x2="10" y2="58" stroke="#ef4444" stroke-dasharray="3 3"/><line x1="${10 + w}" y1="18" x2="${10 + w}" y2="58" stroke="#ef4444" stroke-dasharray="3 3"/></svg>`;
+  }
+
+  const SHAPES = {
+    Kreis: `<circle cx="60" cy="60" r="44" fill="#93c5fd" stroke="#1d4ed8" stroke-width="3"/>`,
+    Dreieck: `<polygon points="60,14 108,104 12,104" fill="#fca5a5" stroke="#b91c1c" stroke-width="3"/>`,
+    Quadrat: `<rect x="18" y="18" width="84" height="84" fill="#86efac" stroke="#15803d" stroke-width="3"/>`,
+    Rechteck: `<rect x="6" y="32" width="108" height="56" fill="#fde68a" stroke="#b45309" stroke-width="3"/>`,
+  };
+  function shapeSVG(name) { return `<svg class="vis-shape" viewBox="0 0 120 120" role="img" aria-label="Form">${SHAPES[name] || ""}</svg>`; }
+
+  const BODIES = {
+    "Würfel": `<polygon points="30,40 70,40 70,100 30,100" fill="#93c5fd" stroke="#1d4ed8" stroke-width="2.5"/><polygon points="30,40 50,22 90,22 70,40" fill="#bfdbfe" stroke="#1d4ed8" stroke-width="2.5"/><polygon points="70,40 90,22 90,82 70,100" fill="#60a5fa" stroke="#1d4ed8" stroke-width="2.5"/>`,
+    "Quader": `<polygon points="14,50 84,50 84,100 14,100" fill="#fde68a" stroke="#b45309" stroke-width="2.5"/><polygon points="14,50 34,32 104,32 84,50" fill="#fef3c7" stroke="#b45309" stroke-width="2.5"/><polygon points="84,50 104,32 104,82 84,100" fill="#fcd34d" stroke="#b45309" stroke-width="2.5"/>`,
+    "Kugel": `<defs><radialGradient id="kg" cx="35%" cy="35%" r="70%"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#f472b6"/></radialGradient></defs><circle cx="60" cy="62" r="44" fill="url(#kg)" stroke="#be185d" stroke-width="2.5"/>`,
+    "Zylinder": `<rect x="28" y="30" width="64" height="66" fill="#86efac" stroke="none"/><path d="M28 30 L28 96 M92 30 L92 96" stroke="#15803d" stroke-width="2.5"/><ellipse cx="60" cy="96" rx="32" ry="10" fill="#4ade80" stroke="#15803d" stroke-width="2.5"/><ellipse cx="60" cy="30" rx="32" ry="10" fill="#bbf7d0" stroke="#15803d" stroke-width="2.5"/>`,
+    "Kegel": `<polygon points="60,12 28,96 92,96" fill="#fdba74" stroke="#c2410c" stroke-width="2.5"/><ellipse cx="60" cy="96" rx="32" ry="10" fill="#fb923c" stroke="#c2410c" stroke-width="2.5"/>`,
+    "Pyramide": `<polygon points="60,12 20,92 76,104" fill="#c4b5fd" stroke="#6d28d9" stroke-width="2.5"/><polygon points="60,12 76,104 104,84" fill="#a78bfa" stroke="#6d28d9" stroke-width="2.5"/>`,
+  };
+  function bodySVG(name) { return `<svg class="vis-shape" viewBox="0 0 120 120" role="img" aria-label="Körper">${BODIES[name] || ""}</svg>`; }
+
+  // Symmetrie: Figur mit gestrichelter Achse; sym = true/false
+  const SYM = [
+    `<path d="M60 20 C 90 20, 100 60, 60 100 C 20 60, 30 20, 60 20 Z" fill="#f472b6"/>`,                    // Herz-artig, symmetrisch
+    `<polygon points="60,14 96,50 80,100 40,100 24,50" fill="#60a5fa"/>`,                                    // Fünfeck
+    `<path d="M60 18 L74 46 L104 50 L82 72 L88 102 L60 88 L32 102 L38 72 L16 50 L46 46 Z" fill="#facc15"/>`, // Stern
+  ];
+  const ASYM = [
+    `<polygon points="30,20 100,40 70,100 20,80" fill="#34d399"/>`,
+    `<path d="M24 100 L24 30 L60 30 L60 60 L100 60 L100 100 Z" fill="#fb923c"/>`,
+    `<polygon points="20,100 60,20 104,70 70,100" fill="#a78bfa"/>`,
+  ];
+  function symSVG(sym, k) {
+    const f = (sym ? SYM : ASYM)[k % 3];
+    return `<svg class="vis-shape" viewBox="0 0 120 120" role="img" aria-label="Figur">${f}<line x1="60" y1="6" x2="60" y2="114" stroke="#1f2937" stroke-width="2" stroke-dasharray="6 5"/></svg>`;
+  }
+
+  window.Visuals = { clockSVG, moneyHTML, numberlineSVG, blocksSVG, coinSVG, dotsSVG, rulerSVG, shapeSVG, bodySVG, symSVG };
 })();

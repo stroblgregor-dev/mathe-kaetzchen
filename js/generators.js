@@ -426,14 +426,206 @@
     return { error: "Bitte nur Cent (unter 1 €) oder nur ganze Euro – keine Kommabeträge" };
   }
 
+
+  // ================================================================== Lehrplan-Erweiterung
+  const fig = (kind, values, givenIdx, extra) => Object.assign({ kind, cells: values.map((v, i) => ({ v, given: givenIdx.includes(i) })) }, extra || {});
+  const figTask = (skill, prompt, figure, hint, explain) => task({ type: "figure", skill, prompt, figure, answer: figure.cells.map((c) => c.v).join(","), hint, explain });
+  // Zahl für Stufe: 1 = bis 20, 2 = bis 100 ohne Übergang, 3 = bis 100 mit Übergang
+  function pairFor(level, maxSum) {
+    if (level === 1) { const a = rnd(1, 10), b = rnd(1, Math.min(10, (maxSum || 20) - a)); return [a, b]; }
+    return pair("plus", level === 2 ? 1 : 3);
+  }
+
+  // ------------------------------------------------------------------ Rechenrätsel (Figuren)
+  function genTriangle(level) {
+    let a, b, c;
+    for (let i = 0; i < 80; i++) {
+      if (level === 1) { a = rnd(1, 9); b = rnd(1, 9); c = rnd(1, 9); if (a + b <= 20 && a + c <= 20 && b + c <= 20) break; }
+      else if (level === 2) { a = rnd(1, 4) * 10 + rnd(0, 3); b = rnd(1, 3) * 10 + rnd(0, 3); c = rnd(1, 3) * 10 + rnd(0, 3); if (a + b <= 100 && a + c <= 100 && b + c <= 100) break; }
+      else { a = rnd(11, 45); b = rnd(11, 45); c = rnd(11, 45); if (a + b <= 100 && a + c <= 100 && b + c <= 100 && ((a % 10) + (b % 10) >= 10 || (b % 10) + (c % 10) >= 10)) break; }
+    }
+    const v = [a, b, c, a + b, a + c, b + c];
+    // Lösbare Muster: alle Innenzahlen gegeben | wie am Blatt: eine Innenzahl fehlt, dafür eine Außenzahl gegeben
+    const patterns = level === 1 ? [[0, 1, 2], [0, 1, 2], [1, 2, 3], [0, 2, 3]] : [[0, 1, 2], [1, 2, 3], [0, 2, 3], [0, 1, 4]];
+    const given = pick(patterns);
+    return figTask("raetsel", "Fülle das Rechendreieck aus!", fig("triangle", v, given), "Außen steht die Summe der zwei Innenfelder daneben. Fehlt innen etwas, rechne minus.",
+      `Innen: ${a}, ${b}, ${c} · außen: ${a + b}, ${a + c}, ${b + c}`);
+  }
+
+  function genWall(level) {
+    let b;
+    for (let i = 0; i < 80; i++) {
+      b = level === 1 ? [rnd(1, 6), rnd(1, 6), rnd(1, 6)] : level === 2 ? [rnd(1, 3) * 10 + rnd(0, 2), rnd(1, 2) * 10 + rnd(0, 2), rnd(1, 3) * 10 + rnd(0, 2)] : [rnd(5, 30), rnd(5, 25), rnd(5, 30)];
+      const top = b[0] + 2 * b[1] + b[2];
+      if (top <= (level === 1 ? 20 : 100) && (level < 3 || (b[0] % 10) + (b[1] % 10) >= 10 || (b[1] % 10) + (b[2] % 10) >= 10)) break;
+    }
+    const v = [b[0], b[1], b[2], b[0] + b[1], b[1] + b[2], b[0] + 2 * b[1] + b[2]];
+    const given = pick(level === 1 ? [[0, 1, 2], [0, 1, 2], [0, 2, 3]] : [[0, 1, 2], [0, 2, 3], [1, 2, 3], [0, 3, 5], [2, 4, 5]]);
+    return figTask("raetsel", "Fülle die Zahlenmauer aus!", fig("wall", v, given), "Jeder Stein ist die Summe der zwei Steine darunter. Oben fehlt etwas? Dann rechne minus.",
+      `${v[0]} + ${v[1]} = ${v[3]}, ${v[1]} + ${v[2]} = ${v[4]}, ${v[3]} + ${v[4]} = ${v[5]}`);
+  }
+
+  function genHouse(level) {
+    const roof = level === 1 ? rnd(10, 20) : level === 2 ? rnd(3, 10) * 10 : rnd(31, 99);
+    const n = level === 1 ? 5 : 4, lefts = new Set();
+    while (lefts.size < n) lefts.add(level === 2 ? rnd(1, roof / 10 - 1) * 10 + (Math.random() < 0.5 ? 0 : 5) % (roof) : rnd(1, roof - 1));
+    const L = [...lefts].filter((x) => x > 0 && x < roof).slice(0, n);
+    if (L.length < n) return genHouse(level);
+    const v = []; L.forEach((x) => v.push(x, roof - x));
+    return figTask("raetsel", `Zahlenhaus: Zerlege die ${roof}!`, fig("house", v, v.map((_, i) => i).filter((i) => i % 2 === 0), { roof }),
+      `Links und rechts zusammen ergeben immer ${roof}.`, L.map((x) => `${x} + ${roof - x} = ${roof}`).join(", "));
+  }
+
+  function genFamily(level) {
+    let a, b;
+    if (level === 1) { a = rnd(3, 12); b = rnd(2, Math.min(12, 20 - a)); } else [a, b] = pair("plus", level === 2 ? 1 : 3);
+    if (a === b) b = b + 1;
+    const s = a + b;
+    const v = [a, s, b, a, b, s, b, a, s, s, a, b, s, b, a];
+    const given = level === 1 ? [0, 1, 2] : pick([[0, 1], [1, 2], [0, 1, 2]]);
+    return figTask("raetsel", "Zahlenfamilie: Finde die 4 Rechnungen!", fig("family", v, given),
+      "Zwei Plus-Aufgaben (Tauschaufgabe!) und zwei Minus-Aufgaben mit denselben drei Zahlen.", `${a} + ${b} = ${s}, ${b} + ${a} = ${s}, ${s} − ${a} = ${b}, ${s} − ${b} = ${a}`);
+  }
+
+  function genAnalogy(level) {
+    const minus = level >= 2 && Math.random() < 0.4;
+    const x = rnd(2, 8), y = minus ? rnd(1, x - 1) : rnd(1, 9 - x);
+    const r = minus ? x - y : x + y, op = minus ? "-" : "+";
+    let lines, vals;
+    if (level === 1) {
+      lines = [`${x} + ${y} = ${r}`, `${10 + x} + ${y} = ?`, `${y} + ${10 + x} = ?`];
+      vals = [10 + r, 10 + r];
+    } else {
+      const tens = shuffle(level === 2 ? [10, 20, 30, 40, 50, 60, 70, 80] : [20, 30, 40, 50, 60, 70, 80, 90]).slice(0, 3).sort((p, q) => p - q);
+      lines = [`${x} ${op} ${y} = ${r}`].concat(tens.map((t) => `${t + x} ${op} ${y} = ?`));
+      vals = tens.map((t) => t + r);
+    }
+    return figTask("raetsel", "Die kleine Aufgabe hilft!", { kind: "list", lines, cells: vals.map((v) => ({ v, given: false })) },
+      "Rechne zuerst die kleine Aufgabe – die Einer bleiben gleich, nur die Zehner ändern sich.", lines.slice(1).map((l, k) => l.replace("?", vals[k])).join(", "));
+  }
+
+  function genRaetsel(level) {
+    return pick([genTriangle, genTriangle, genWall, genWall, genHouse, genFamily, genAnalogy])(level);
+  }
+
+  // ------------------------------------------------------------------ Verdoppeln & Halbieren
+  function genDoppelt(level) {
+    const k = pick(["tdouble", "thalf", "double", "half"]);
+    const pool = level === 1 ? { d: Array.from({ length: 10 }, (_, i) => i + 1), h: Array.from({ length: 10 }, (_, i) => (i + 1) * 2) }
+      : level === 2 ? { d: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50], h: [20, 30, 40, 50, 60, 70, 80, 90, 100, 10] }
+      : { d: Array.from({ length: 40 }, (_, i) => i + 11), h: Array.from({ length: 45 }, (_, i) => (i + 6) * 2) };
+    if (k === "tdouble" || k === "thalf") {
+      const isD = k === "tdouble", xs = shuffle(isD ? pool.d : pool.h).slice(0, 5).sort((a, b) => isD ? a - b : b - a);
+      const v = []; xs.forEach((x) => v.push(x, isD ? x * 2 : x / 2));
+      return figTask("doppelt", isD ? "Verdopple die Zahlen!" : "Halbiere die Zahlen!", fig("table", v, v.map((_, i) => i).filter((i) => i % 2 === 0), { label: isD ? "das Doppelte" : "die Hälfte" }),
+        isD ? "Das Doppelte heißt: die Zahl plus noch einmal die gleiche Zahl." : "Die Hälfte heißt: in zwei gleich große Teile teilen.", null);
+    }
+    if (k === "double") { const x = pick(pool.d); return task({ skill: "doppelt", prompt: `Wie viel ist das Doppelte von ${x}?`, expr: `${x} + ${x} = ?`, answer: x * 2, hint: "Rechne die Zahl plus noch einmal die gleiche Zahl.", explain: `${x} + ${x} = ${x * 2}` }); }
+    const x = pick(pool.h);
+    return task({ skill: "doppelt", prompt: `Wie viel ist die Hälfte von ${x}?`, expr: null, answer: x / 2, hint: "Welche Zahl plus sich selbst ergibt " + x + "?", explain: `${x / 2} + ${x / 2} = ${x}` });
+  }
+
+  // ------------------------------------------------------------------ Einmaleins & Teilen
+  function genEinmaleins(level) {
+    const rows = level === 1 ? [2, 5, 10] : level === 2 ? [2, 3, 4, 5, 10] : [2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const r = pick(rows), n = rnd(1, 10), p = r * n;
+    const k = level === 1 ? pick(["dots", "mal", "mal", "table"]) : level === 2 ? pick(["mal", "tausch", "gap", "dots", "table", "story"]) : pick(["mal", "div", "div", "gap", "divgap", "story"]);
+    if (k === "dots") {
+      const rr = Math.min(r, n) <= 5 ? Math.min(r, n) : r, cc = rr === r ? n : r;
+      return task({ skill: "einmaleins", prompt: "Wie viele Punkte sind es?", expr: `${rr} · ${cc} = ?`, answer: rr * cc, visual: { kind: "dots", rows: rr, cols: cc },
+        hint: `Zähle eine Reihe und rechne dann ${rr} mal.`, explain: `${rr} · ${cc} = ${rr * cc}` });
+    }
+    if (k === "table") {
+      const xs = shuffle(Array.from({ length: 10 }, (_, i) => i + 1)).slice(0, 5).sort((a, b) => a - b);
+      const v = []; xs.forEach((x) => v.push(x, x * r));
+      return figTask("einmaleins", `Malreihe mit ${r}!`, fig("table", v, v.map((_, i) => i).filter((i) => i % 2 === 0), { label: `· ${r}` }),
+        `Rechne jede Zahl mal ${r}. Tipp: Die Reihe springt immer um ${r} weiter.`, null);
+    }
+    if (k === "tausch") return task({ skill: "einmaleins", prompt: "Tauschaufgabe: Was kommt heraus?", expr: `${n} · ${r} = ?`, answer: p, hint: `Tausche: ${r} · ${n} ist genauso viel.`, explain: `${n} · ${r} = ${r} · ${n} = ${p}` });
+    if (k === "gap") return task({ skill: "einmaleins", prompt: "Welche Zahl fehlt?", expr: `? · ${r} = ${p}`, answer: n, hint: `Zähle in ${r}er-Schritten bis ${p}.`, explain: `${n} · ${r} = ${p}` });
+    if (k === "div") return task({ skill: "einmaleins", prompt: "Teile!", expr: `${p} : ${r} = ?`, answer: n, hint: `Wie oft passt die ${r} in die ${p}? Die Malaufgabe hilft.`, explain: `${n} · ${r} = ${p}, also ${p} : ${r} = ${n}` });
+    if (k === "divgap") return task({ skill: "einmaleins", prompt: "Welche Zahl fehlt?", expr: `${p} : ? = ${n}`, answer: r, hint: "Denk an die Malaufgabe.", explain: `${p} : ${r} = ${n}` });
+    if (k === "story") {
+      const st = pick([
+        [`${n} Kätzchen haben je 4 Pfoten. Wie viele Pfoten sind das?`, n * 4, 4],
+        [`Ein Päckchen hat ${r} Leckerli. Kalea kauft ${n} Päckchen. Wie viele Leckerli sind das?`, p, r],
+        [`${p} Fischlein werden gerecht an ${r} Kätzchen verteilt. Wie viele bekommt jedes?`, n, r],
+      ]);
+      return task({ skill: "einmaleins", prompt: st[0], answer: st[1], hint: "Mal oder geteilt? Mal dir die Aufgabe auf.", explain: `Ergebnis: ${st[1]}` });
+    }
+    const asChoice = Math.random() < 0.3;
+    return task({ type: asChoice ? "choice" : "input", skill: "einmaleins", prompt: "Rechne!", expr: `${r} · ${n} = ?`, answer: p, choices: asChoice ? numChoices(p, 3, r, 0, 100) : [],
+      hint: `Zähle in ${r}er-Schritten: ${Array.from({ length: Math.min(n, 4) }, (_, i) => r * (i + 1)).join(", ")} …`, explain: `${r} · ${n} = ${p}` });
+  }
+
+  // ------------------------------------------------------------------ Längen
+  function genLaengen(level) {
+    const k = level === 1 ? pick(["ruler", "ruler", "compare", "plus"]) : level === 2 ? pick(["ruler", "m", "plus", "missing", "compare"]) : pick(["convert", "convert2", "missing", "plus", "story"]);
+    if (k === "ruler") {
+      const max = level === 1 ? 15 : 20, len = rnd(3, max - 1), item = pick(["pencil", "band"]);
+      return task({ skill: "laengen", prompt: item === "band" ? "Wie lang ist das Band?" : "Wie lang ist der Stift?", answer: len, unit: "cm", visual: { kind: "ruler", len, max, item },
+        hint: "Lies am Ende ab – das Lineal beginnt bei 0.", explain: `Er ist ${len} cm lang.` });
+    }
+    if (k === "compare") {
+      const a = rnd(5, level === 1 ? 20 : 90), b = rnd(5, level === 1 ? 20 : 90);
+      if (a === b) return genLaengen(level);
+      return task({ type: "compare", skill: "laengen", prompt: "Was ist länger? Setze das Zeichen ein.", expr: `${a} cm ? ${b} cm`, choices: ["<", ">", "="], answer: a < b ? "<" : ">", hint: "Vergleiche die Zahlen.", explain: `${a} cm ${a < b ? "<" : ">"} ${b} cm` });
+    }
+    if (k === "plus") {
+      const [a, b] = level === 1 ? [rnd(2, 10), rnd(2, 9)] : pair("plus", level === 2 ? 1 : 3);
+      return task({ skill: "laengen", prompt: `Zwei Bänder: ${a} cm und ${b} cm. Wie lang sind sie zusammen?`, answer: a + b, unit: "cm", hint: "Rechne die Längen zusammen.", explain: `${a} cm + ${b} cm = ${a + b} cm` });
+    }
+    if (k === "m") return task({ type: "choice", skill: "laengen", prompt: "Wie viele Zentimeter hat 1 Meter?", choices: shuffle(["10", "100", "1000"]), answer: "100", hint: "Ein großer Schritt ist ungefähr 1 Meter.", explain: "1 m = 100 cm" });
+    if (k === "missing") { const a = rnd(1, 19) * 5; return task({ skill: "laengen", prompt: `Der Kratzbaum ist ${a} cm hoch. Wie viel fehlt auf 1 m?`, answer: 100 - a, unit: "cm", hint: "1 m = 100 cm. Ergänze auf 100.", explain: `${a} + ${100 - a} = 100 cm` }); }
+    if (k === "convert") { const m = rnd(2, 9); return Math.random() < 0.5
+      ? task({ skill: "laengen", prompt: "Wie viele Zentimeter?", expr: `${m} m = ? cm`, answer: m * 100, hint: "1 m = 100 cm.", explain: `${m} m = ${m * 100} cm` })
+      : task({ skill: "laengen", prompt: "Wie viele Meter?", expr: `${m * 100} cm = ? m`, answer: m, hint: "100 cm = 1 m.", explain: `${m * 100} cm = ${m} m` }); }
+    if (k === "convert2") { const m = rnd(1, 3), c = rnd(1, 9) * 10; return task({ skill: "laengen", prompt: "Wie viele Zentimeter?", expr: `${m} m ${c} cm = ? cm`, answer: m * 100 + c, hint: "1 m = 100 cm, dann die cm dazu.", explain: `${m * 100} cm + ${c} cm = ${m * 100 + c} cm` }); }
+    const a = rnd(20, 60), b = rnd(10, 100 - a);
+    return task({ skill: "laengen", prompt: `Mimi springt ${a} cm weit, Luna ${b} cm weiter als Mimi. Wie weit springt Luna?`, answer: a + b, unit: "cm", hint: "Weiter heißt: dazuzählen.", explain: `${a} + ${b} = ${a + b} cm` });
+  }
+
+  // ------------------------------------------------------------------ Formen & Körper
+  const FLAECHEN = ["Kreis", "Dreieck", "Quadrat", "Rechteck"], KOERPER = ["Würfel", "Quader", "Kugel", "Zylinder", "Kegel", "Pyramide"];
+  function genGeometrie(level) {
+    const k = level === 1 ? pick(["flaeche", "flaeche", "ecken"]) : level === 2 ? pick(["koerper", "koerper", "flaeche", "ecken"]) : pick(["sym", "sym", "koerper", "props", "roll"]);
+    if (k === "flaeche") { const f = pick(FLAECHEN); return task({ type: "choice", skill: "geometrie", prompt: "Wie heißt diese Form?", visual: { kind: "shape", name: f }, choices: shuffle(FLAECHEN), answer: f, hint: "Zähle die Ecken und schau die Seiten an.", explain: `Das ist ein ${f}.` }); }
+    if (k === "koerper") { const f = pick(KOERPER), ch = shuffle([f].concat(shuffle(KOERPER.filter((x) => x !== f)).slice(0, 3))); return task({ type: "choice", skill: "geometrie", prompt: "Wie heißt dieser Körper?", visual: { kind: "body", name: f }, choices: ch, answer: f, hint: "Kann er rollen? Hat er Ecken?", explain: `Das ist ein${["Kugel", "Pyramide"].includes(f) ? "e" : ""} ${f}.` }); }
+    if (k === "ecken") { const f = pick([["Dreieck", 3], ["Quadrat", 4], ["Rechteck", 4], ["Kreis", 0]]); return task({ skill: "geometrie", prompt: `Wie viele Ecken hat ein${f[0] === "Kreis" ? "" : ""} ${f[0]}?`, visual: { kind: "shape", name: f[0] }, answer: f[1], hint: "Zähle die Spitzen.", explain: `Ein ${f[0]} hat ${f[1]} Ecken.` }); }
+    if (k === "sym") { const sym = Math.random() < 0.5; return task({ type: "choice", skill: "geometrie", prompt: "Ist die Figur symmetrisch? (Spiegelachse gestrichelt)", visual: { kind: "sym", sym, k: rnd(0, 2) }, choices: ["Ja", "Nein"], answer: sym ? "Ja" : "Nein", hint: "Klappe die Figur in Gedanken an der Linie zusammen – passen beide Hälften genau?", explain: sym ? "Beide Hälften sind gleich – symmetrisch." : "Die Hälften sind verschieden – nicht symmetrisch." }); }
+    if (k === "roll") return task({ type: "choice", skill: "geometrie", prompt: "Welcher Körper kann nur rollen und hat keine Ecken und Kanten?", choices: shuffle(["Kugel", "Würfel", "Zylinder"]), answer: "Kugel", hint: "Denk an einen Ball.", explain: "Die Kugel." });
+    const q = pick([["Wie viele Flächen hat ein Würfel?", 6], ["Wie viele Ecken hat ein Würfel?", 8], ["Wie viele Ecken hat ein Quader?", 8], ["Wie viele Flächen hat ein Quader?", 6]]);
+    return task({ skill: "geometrie", prompt: q[0], visual: { kind: "body", name: q[0].includes("Würfel") ? "Würfel" : "Quader" }, answer: q[1], hint: "Zähle auch die, die man nicht sieht!", explain: `Richtig ist ${q[1]}.` });
+  }
+
+  // ------------------------------------------------------------------ Zahlenfolgen & Muster
+  function genMuster(level) {
+    const steps = level === 1 ? [1, 2, 10, -1] : level === 2 ? [2, 5, 10, -2, -10, 3] : [3, 4, 5, -5, -3, "alt"];
+    const st = pick(steps);
+    let seq = [], x;
+    if (st === "alt") { x = rnd(1, 20); for (let i = 0; i < 6; i++) { seq.push(x); x += i % 2 ? 3 : 2; } }
+    else { const lim = level === 1 ? 20 : 100; x = st > 0 ? rnd(0, lim - st * 6) : rnd(-st * 6, lim); if (x < 0) return genMuster(level); for (let i = 0; i < 6; i++) { seq.push(x); x += st; } }
+    if (seq.some((v) => v < 0 || v > 100)) return genMuster(level);
+    const gapAt = level === 3 && Math.random() < 0.4 ? rnd(1, 4) : 5;
+    const shown = seq.map((v, i) => (i === gapAt ? "?" : v)).slice(0, gapAt === 5 ? 6 : 6);
+    return task({ skill: "muster", prompt: "Wie geht die Zahlenfolge weiter?", expr: shown.join(", "), answer: seq[gapAt],
+      hint: st === "alt" ? "Schau genau: Die Sprünge wechseln sich ab." : "Wie groß ist der Sprung von einer Zahl zur nächsten?", explain: st === "alt" ? "Immer abwechselnd +2 und +3." : `Immer ${st > 0 ? "+" : "−"}${Math.abs(st)}.` });
+  }
+
   const MODULES = [
-    { key: "zahlen100", name: "Zahlen bis 100", emoji: "🔢", color: "#a78bfa", gen: genZahlen },
+    { key: "zahlen100", name: "Zahlen bis 100", emoji: "💯", color: "#a78bfa", gen: genZahlen },
     { key: "plus",      name: "Plus",           emoji: "➕", color: "#34d399", gen: genPlus },
     { key: "minus",     name: "Minus",          emoji: "➖", color: "#60a5fa", gen: genMinus },
-    { key: "ergaenzen", name: "Ergänzen",       emoji: "🧩", color: "#f472b6", gen: genErgaenzen },
+    { key: "ergaenzen", name: "Ergänzen",       emoji: "➰", color: "#f472b6", gen: genErgaenzen },
+    { key: "raetsel",   name: "Rechenrätsel",   emoji: "🧩", color: "#c084fc", gen: genRaetsel },
+    { key: "doppelt",   name: "Verdoppeln & Halbieren", emoji: "✌️", color: "#38bdf8", gen: genDoppelt },
+    { key: "einmaleins",name: "Einmaleins",     emoji: "✖️", color: "#f43f5e", gen: genEinmaleins },
     { key: "geld",      name: "Geld",           emoji: "💶", color: "#fbbf24", gen: genGeld },
     { key: "uhr",       name: "Uhr",            emoji: "🕒", color: "#fb923c", gen: genUhr },
     { key: "zeit",      name: "Zeit & Kalender",emoji: "📅", color: "#2dd4bf", gen: genZeit },
+    { key: "laengen",   name: "Längen",         emoji: "📏", color: "#84cc16", gen: genLaengen },
+    { key: "geometrie", name: "Formen & Körper",emoji: "🔷", color: "#6366f1", gen: genGeometrie },
+    { key: "muster",    name: "Zahlenfolgen",   emoji: "🔢", color: "#14b8a6", gen: genMuster },
     { key: "sach",      name: "Rechengeschichten", emoji: "📖", color: "#f87171", gen: genSach },
   ];
 
@@ -446,7 +638,7 @@
       if (!mod) continue;
       const lv = (levelsByKey && levelsByKey[key]) || level || 1;
       const t = mod.gen(lv);
-      const sig = t.type + "|" + t.prompt + "|" + (t.expr || "") + "|" + JSON.stringify(t.clock || t.money || t.numberline || t.blocks || "");
+      const sig = t.type + "|" + t.prompt + "|" + (t.expr || "") + "|" + JSON.stringify(t.clock || t.money || t.numberline || t.blocks || t.figure || t.visual || "");
       if (seen.has(sig)) continue;
       seen.add(sig);
       t.module = key;

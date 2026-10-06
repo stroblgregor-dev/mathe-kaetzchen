@@ -16,9 +16,15 @@
     uhr: "Uhrzeit lesen",
     zeit: "Zeitspannen und Zeiteinheiten",
     sach: "Sachaufgaben (Textaufgaben)",
+    raetsel: "Rechenrätsel (Rechendreiecke, Zahlenmauern, Zahlenhäuser, Zahlenfamilien)",
+    doppelt: "Verdoppeln und Halbieren",
+    einmaleins: "Einmaleins und Teilen",
+    laengen: "Längen (cm, m)",
+    geometrie: "Formen und Körper, Symmetrie",
+    muster: "Zahlenfolgen und Muster",
     sonstiges: "Sonstiges",
   };
-  const TASK_TYPES = ["input", "choice", "compare", "clock", "money", "numberline", "blocks"];
+  const TASK_TYPES = ["input", "choice", "compare", "clock", "money", "numberline", "blocks", "figure"];
 
   const nullable = (s) => ({ anyOf: [s, { type: "null" }] });
   const obj = (props) => ({ type: "object", additionalProperties: false, properties: props, required: Object.keys(props) });
@@ -36,15 +42,22 @@
     money: nullable({ type: "array", items: { type: "integer" } }),
     numberline: nullable(obj({ min: { type: "integer" }, max: { type: "integer" }, marker: { type: "integer" } })),
     blocks: nullable(obj({ tens: { type: "integer" }, ones: { type: "integer" } })),
+    figure: nullable(obj({
+      kind: { type: "string", enum: ["triangle", "wall", "house", "family", "table", "list"] },
+      roof: nullable({ type: "integer" }), label: nullable({ type: "string" }),
+      lines: { type: "array", items: { type: "string" } },
+      cells: { type: "array", items: obj({ v: { type: "integer" }, given: { type: "boolean" } }) },
+    })),
   });
   const PACK_SCHEMA = obj({ title: { type: "string" }, summary: { type: "string" }, emoji: { type: "string" }, tasks: { type: "array", items: TASK_SCHEMA } });
 
   const SYSTEM = `Du erstellst Mathematik-Übungsaufgaben für ein Kind in der 2. Klasse Volksschule in Österreich.
 Die Aufgaben werden in einer Lern-App mit Kätzchen-Thema gespielt. Das Kind kann erst wenig lesen.
 
-Lehrplan-Rahmen 2. Klasse (Österreich): Zahlenraum bis 100, Zehner und Einer, Plus und Minus mit und
-ohne Zehnerübergang, Ergänzen, Platzhalteraufgaben, Geld (Euro und Cent, Münzen und Scheine),
-Uhr (volle, halbe, Viertelstunden, später 5-Minuten-Schritte), Zeitspannen, einfache Sachaufgaben.
+Lehrplan-Rahmen 2. Klasse (Österreich, z.B. Schulbuch "Die Matheforscher:innen"): Wiederholung Zahlenraum 20,
+Zahlenraum bis 100, Zehner und Einer, Plus und Minus mit und ohne Zehnerübergang, Ergänzen, Platzhalteraufgaben,
+Tausch- und Umkehraufgaben, Verdoppeln/Halbieren, Einmaleins und Teilen, Geld (Euro und Cent), Uhr und Zeitspannen,
+Längen (cm, m), Formen und Körper, Zahlenfolgen, einfache Sachaufgaben.
 
 Sprache: österreichisches Deutsch (Jänner; "viertel 3" = 2:15, "halb 3" = 2:30, "dreiviertel 3" = 2:45).
 Kurze, einfache Sätze, maximal 2 Sätze pro Aufgabe. Gern Katzen, Tiere, Schule und Alltag als Geschichte.
@@ -66,6 +79,22 @@ Aufgabentypen (Feld "type") – alle nicht benötigten Felder sind null bzw. cho
 - "numberline": Zahlenstrahl. numberline = {"min","max","marker"}, (max-min) 10, 20 oder 100.
   Frage "Welche Zahl zeigt der Pfeil?" -> answer = marker.
 - "blocks": Zehnerstangen und Einerwürfel. blocks = {"tens","ones"}, Frage "Welche Zahl ist das?", answer = tens*10+ones.
+
+- "figure": ausfüllbare Figur wie am Arbeitsblatt (expr = null, answer = "", choices = []).
+  figure = {kind, cells: [{v, given}], roof, label, lines}. Felder mit given=false füllt das Kind aus;
+  mindestens ein Feld given=false, und die Figur muss mit den gegebenen Zahlen eindeutig lösbar sein.
+  * "triangle" (Rechendreieck): genau 6 cells = [innen oben, innen links unten, innen rechts unten,
+    Seite links (= oben + links unten), Seite rechts (= oben + rechts unten), Seite unten (= links unten + rechts unten)].
+  * "wall" (Zahlenmauer): 6 cells (unterste Reihe 3 Steine von links nach rechts, dann 2, dann die Spitze)
+    oder 10 cells (4 Reihen); jeder Stein ist die Summe der zwei Steine darunter.
+  * "house" (Zahlenhaus/Zerlegungshaus): roof = Dachzahl, cells = [links, rechts, links, rechts, …] mit links + rechts = roof.
+  * "family" (Zahlenfamilie, Tausch-/Umkehraufgaben): 15 cells = [a, Summe, b] und dann 4 Zeilen (x, y, z):
+    a + b = Summe, b + a = Summe, Summe − a = b, Summe − b = a. Die 12 Zeilen-Felder sind given=false.
+  * "table" (Tabelle): label z.B. "das Doppelte", "die Hälfte", "· 5"; cells = [Zahl, Ergebnis, Zahl, Ergebnis, …], Zahlen given=true.
+  * "list" (Päckchen, z.B. "Die kleine Aufgabe hilft"): lines = ["2 + 5 = 7", "12 + 5 = ?", …] (je Zeile höchstens ein ?),
+    cells = die Lösungen der ? in Reihenfolge (alle given=false).
+  Nicht benötigte Felder: roof = null, label = null, lines = [].
+  Nutze "figure", wenn am Lernzettel solche Darstellungen vorkommen (Rechendreiecke, Zahlenmauern, Zahlenhäuser, Sterne/Zahlenfamilien, Tabellen).
 
 "hint": ein kurzer, freundlicher Tipp, ohne das Ergebnis zu verraten.
 "explain": kurzer Lösungsweg für nach einem Fehler (z.B. "34 + 8 = 34 + 6 + 2 = 42").
@@ -143,6 +172,14 @@ Titel kurz und kindgerecht (max. 4 Wörter), "summary" ist ein Satz für die Elt
   function validateTask(t) {
     t = Object.assign({}, t);
     if (!TASK_TYPES.includes(t.type) || !String(t.prompt || "").trim()) return null;
+    if (t.type === "figure") {
+      const f = t.figure;
+      if (!f || !window.Figures || !Figures.rulesOk(f) || !Figures.blanks(f).length) return null;
+      if (f.kind === "family" && !(f.cells.slice(3).every((c) => !c.given))) f.cells.slice(3).forEach((c) => { c.given = false; });
+      t.answer = f.cells.map((c) => c.v).join(","); t.choices = []; t.expr = null;
+      if (!SKILLS[t.skill]) t.skill = "raetsel";
+      return t;
+    }
     t.answer = String(t.answer ?? "").trim();
     t.choices = (t.choices || []).map((c) => String(c).trim()).filter(Boolean);
     if (!t.answer) return null;
