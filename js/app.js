@@ -2,7 +2,8 @@
 (function () {
   "use strict";
 
-  const { CATS, ACCESSORIES, SLOTS, catSVG } = window.Cats;
+  const { CATS, ACCESSORIES, SLOTS, WORLDS, TRICKS, catSVG } = window.Cats;
+  const R = window.Room;
   const MILESTONES = [25, 50, 100, 150, 200, 300, 400, 500, 750, 1000];
   const V = window.Visuals;
   const GEN = window.Generators;
@@ -129,6 +130,8 @@
     s.giftQueue = s.giftQueue || []; s.milestones = s.milestones || []; s.rounds = s.rounds || 0; s.boost = s.boost || 0;
     s.food = s.food ?? 0; s.treats = s.treats || 0; s.sardines = s.sardines || 0; s.playDays = s.playDays || []; s.achieved = s.achieved || [];
     s.perfectL3 = s.perfectL3 || 0; s.grade1 = s.grade1 || 0; s.careWeeks = s.careWeeks || 0; s.careStreak = s.careStreak || 0;
+    s.room = s.room || { owned: [], placed: {} }; s.room.owned = s.room.owned || []; s.room.placed = s.room.placed || {};
+    s.trophies = s.trophies || []; s.worldsDone = s.worldsDone || []; s.worldNews = s.worldNews || []; s.showGold = s.showGold || 0;
     s.cats.forEach((c) => {
       if (typeof c.acc === "string") { const a = ACCESSORIES.find((x) => x.id === c.acc); c.acc = a ? { [a.slot]: a.id } : {}; }
       else if (!c.acc) c.acc = {};
@@ -137,6 +140,7 @@
       if (c.brushed === undefined) c.brushed = today();
       if (c.hearts === undefined) c.hearts = 3;
       if (c.growth === undefined) c.growth = 0;
+      c.tp = c.tp || 0;
     });
     // v2: Gekaufte Teile gehören einzelnen Kätzchen (vorher: allen gemeinsam)
     if (!s.v2) {
@@ -233,6 +237,7 @@
     if (S.view === "result") return renderResult();
     if (S.view === "cats") return renderCats();
     if (S.view === "shop") return renderShop();
+    if (S.view === "room") return renderRoom();
     if (S.view === "parent") return renderParent();
   }
 
@@ -247,7 +252,7 @@
       </div></header>`;
   }
   function bottomnav(active) {
-    const items = [["home", "🏠", "Üben"], ["cats", "🐱", "Kätzchen"], ["shop", "🧺", "Laden"], ["parent", "🔒", "Eltern"]];
+    const items = [["home", "🏠", "Üben"], ["cats", "🐱", "Kätzchen"], ["room", "🛋️", "Zimmer"], ["shop", "🧺", "Laden"], ["parent", "🔒", "Eltern"]];
     return `<nav class="bottomnav">${items.map(([v, i, l]) => `<button class="${active === v ? "on" : ""}" data-act="nav" data-v="${v}"><span>${i}</span>${l}</button>`).join("")}</nav>`;
   }
 
@@ -291,12 +296,12 @@
     if (ev && Math.random() < 0.5) return ev.greeting;
     if (done >= goal) return `Juhu, ${n}! Tagesziel geschafft! ⭐ Du bist ein Mathe-Profi!`;
     if (done === 0) return pick([`Hallo ${n}! Ich bin noch ganz müde… Rechnest du mit mir?`, `Miau, ${n}! Hast du heute schon geübt?`, `Hallo ${n}! Mein Bauch knurrt – verdienen wir uns Fischlein?`]);
-    if (s.fish >= BASKET_PRICE && commonLeft() > 0) return `Du hast ${s.fish} Fischlein! Schau mal in den Laden – ein Kätzchen wartet! 🧺`;
+    if (s.fish >= basketPrice() && commonLeft() > 0) return `Du hast ${s.fish} Fischlein! Schau mal in den Laden – ein Kätzchen wartet! 🧺`;
     return pick([`Super, schon ${done} richtig heute! Noch ${goal - done} bis zum Tagesziel.`, `Weiter so, ${n}! Du schaffst das!`]);
   }
 
   function renderHome() {
-    applyDecay(); checkDailyGift();
+    applyDecay(); checkDailyGift(); checkWorlds();
     const s = st(), set = S.boot.settings, goal = set.daily_goal, done = Math.min(S.profile.today_correct, goal);
     const fc = favCat();
     const mood = S.profile.today_correct === 0 ? "sleep" : (S.profile.today_correct >= goal ? "joy" : "happy");
@@ -315,6 +320,7 @@
       ${(() => { const ev = currentEvent(); return ev ? `<section class="event-banner">${ev.emoji} <b>${ev.name}</b> – im Laden gibt es jetzt besondere Sachen!</section>` : ""; })()}
       ${careCard()}
       ${giftBanner()}
+      ${showOpen() ? `<button class="show-banner" data-act="showopen"><span>🎪</span><span><b>Diese Woche ist Katzen-Show!</b><small>Mach ein Kätzchen schick und rechne dich aufs Siegerpodest</small></span></button>` : ""}
       ${packs.length ? `<h2 class="sec">📚 Von der Schule &amp; neu für dich</h2><div class="packs">${packs.map((p) => `
         <button class="pack-card" data-act="packmenu" data-id="${p.id}"><span class="pe">${esc(p.emoji || "⭐")}</span>
           <span class="pt">${esc(p.title)}</span><span class="tag ${p.source}">${p.source === "lernzettel" ? "Lernzettel" : "KI ✨"}</span>${packStatLine(p.id)}</button>`).join("")}</div>` : ""}
@@ -328,6 +334,7 @@
         ${mods.map((m) => `<button class="mod-card" style="--c:${m.color}" data-act="pickmod" data-key="${m.key}">
           <span class="me">${m.emoji}</span><span class="mn">${m.name}</span><span class="ml">${"🐾".repeat(moduleLevel(m.key))}<span class="dim">${"🐾".repeat(3 - moduleLevel(m.key))}</span></span></button>`).join("")}
       </div></main>${bottomnav("home")}`;
+    showWorldNews();
   }
 
   // ------------------------------------------------------------------ Übungen: Statistik, Test-Modus
@@ -384,7 +391,7 @@
     if (mode.kind === "module") tasks = GEN.makeSession([mode.key], mode.level || moduleLevel(mode.key), n);
     else if (mode.kind === "mix") {
       const keys = S.boot.settings.modules.length ? S.boot.settings.modules : GEN.MODULES.map((m) => m.key);
-      tasks = GEN.makeSession(keys, mode.level || 1, n);
+      tasks = GEN.makeSession(keys, mode.level || 1, mode.n || n);
     } else if (mode.kind === "pack") {
       const p = mode.pack;
       tasks = GEN.shuffle(p.tasks).slice(0, p.source === "eigen" ? 200 : n).map((t) => Object.assign({}, t, { module: t.skill || "sonstiges", pack: p.id }));
@@ -652,6 +659,27 @@
       });
     }
     const joy = joyAfterRound(rate);
+    // Tricks: das Trainings-Kätzchen bekommt jede gleich richtige Aufgabe als Trainingspunkt
+    let trick = null, train = null;
+    const tc = trainee();
+    if (tc) {
+      const before = tricksOf(tc).length;
+      tc.tp = (tc.tp || 0) + firsts;
+      const learned = tricksOf(tc);
+      train = { cat: tc.id, plus: firsts };
+      if (learned.length > before) trick = { cat: tc.id, trick: learned[learned.length - 1].id };
+    }
+    // Katzen-Show
+    let show = null;
+    if (g.mode.show) {
+      const sc = s.cats.find((c) => c.id === g.mode.show) || favOwn();
+      const scores = showScores(sc, rate), tot = scores.reduce((a, b) => a + b, 0);
+      const place = tot >= 13 ? "gold" : tot >= 10 ? "silver" : tot >= 7 ? "bronze" : "ribbon";
+      s.fish += PLACES[place].fish; s.showWeek = weekId();
+      s.trophies.push({ w: weekId(), cat: sc.id, place, icon: PLACES[place].icon });
+      if (place === "gold") s.showGold++;
+      show = { cat: sc.id, scores, place };
+    }
     if (g.mode.level === 3 && n >= 5 && firsts === n) s.perfectL3++;
     if (g.boost) s.boost = Math.max(0, (s.boost || 0) - 1);
     if (g.mode.kind === "pack" && stars === 3) s.packstars++;
@@ -664,7 +692,7 @@
     const giftsNew = roundGifts() + checkAchievements();
     const unlocked = checkUnlocks(true);
     saveState();
-    S.result = { joy, giftsNew, stars, fish: g.fish, bonus, goalBonus, fixAllBonus, fixed: g.fixed, openLeft: s.retry.length, firsts, n, levelMsgs, unlocked, mode: g.mode };
+    S.result = { joy, giftsNew, stars, fish: g.fish, bonus, goalBonus, fixAllBonus, fixed: g.fixed, openLeft: s.retry.length, firsts, n, levelMsgs, unlocked, mode: g.mode, trick, train, show };
     S.game = null; S.view = "result"; render();
     sfx.fanfare(); confetti();
   }
@@ -703,6 +731,7 @@
       ${catSVG(fc.def, { mood: r.grade <= 3 ? "joy" : "happy", acc: fc.acc, cls: "cat-md " + (r.grade <= 3 ? "jump" : "") })}
       <div class="loot"><span>🐟 +${r.fish}</span>${r.gradeBonus ? `<span>📝 Noten-Bonus +${r.gradeBonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}</div>
       ${r.joy ? `<div class="levelup joy">❤️ +${r.joy} für alle Kätzchen</div>` : ""}
+      ${trainHTML(r)}
       ${careReminder()}
       ${giftButton(r)}
       ${r.wrong.length ? `<div class="review"><h3>Das schauen wir uns nochmal an:</h3>
@@ -713,6 +742,7 @@
         <button class="btn big" data-act="again">📝 Nochmal testen</button></div>
     </div>`;
     revealPending(r);
+    if (r.trick) setTimeout(() => { performTrick(document.getElementById("trickcat"), r.trick.trick); }, 900);
   }
 
   function renderResult() {
@@ -721,21 +751,23 @@
     const msg = r.mode.kind === "retry" ? (r.fixed ? `${r.fixed} ${r.fixed === 1 ? "Fehler" : "Fehler"} repariert! 🔧` : "Weiter üben – das wird!")
       : r.stars === 3 ? "Fantastisch!" : r.stars === 2 ? "Sehr gut!" : "Gut gemacht – üben macht stark!";
     $app.innerHTML = `<div class="screen result">
-      <div class="stars">${[1, 2, 3].map((i) => `<span class="${i <= r.stars ? "on" : ""}" style="animation-delay:${i * 0.25}s"><svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" fill="currentColor" stroke="rgba(0,0,0,.12)" stroke-width="1" stroke-linejoin="round"/></svg></span>`).join("")}</div>
+      ${r.show ? showResultHTML(r) : `<div class="stars">${[1, 2, 3].map((i) => `<span class="${i <= r.stars ? "on" : ""}" style="animation-delay:${i * 0.25}s"><svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" fill="currentColor" stroke="rgba(0,0,0,.12)" stroke-width="1" stroke-linejoin="round"/></svg></span>`).join("")}</div>
       <h1>${msg}</h1>
-      ${catSVG(fc.def, { mood: "joy", acc: fc.acc, cls: "cat-lg jump" })}
+      ${catSVG(fc.def, { mood: "joy", acc: fc.acc, cls: "cat-lg jump" })}`}
       <p class="big">${r.firsts} von ${r.n} gleich richtig</p>
       ${r.mode.level ? `<p class="muted">Level ${r.mode.level} ${"🐾".repeat(r.mode.level)} · ${LEVEL_FISH[r.mode.level]} 🐟 pro Aufgabe</p>` : ""}
       <div class="loot"><span>🐟 +${r.fish}</span>${r.bonus ? `<span>⭐ Sterne-Bonus +${r.bonus}</span>` : ""}${r.goalBonus ? `<span>🎯 Tagesziel +${r.goalBonus}</span>` : ""}${r.fixAllBonus ? `<span>🧹 Werkstatt leer +${r.fixAllBonus}</span>` : ""}</div>
       ${r.joy ? `<div class="levelup joy">❤️ +${r.joy} für alle Kätzchen</div>` : ""}
+      ${trainHTML(r)}
       ${careReminder()}
       ${r.mode.kind === "retry" && r.openLeft ? `<p class="muted">Noch ${r.openLeft} in der Fehler-Werkstatt.</p>` : ""}
       ${r.levelMsgs.map((m) => `<div class="levelup">⬆️ ${esc(m)}</div>`).join("")}
       ${giftButton(r)}
-      ${st().fish >= BASKET_PRICE && commonLeft() > 0 ? `<button class="btn big pulse" data-act="nav" data-v="shop">🧺 Kätzchen-Körbchen öffnen!</button>` : ""}
-      <div class="row"><button class="btn ghost big" data-act="nav" data-v="home">Fertig</button>${r.mode.kind === "retry" && !r.openLeft ? "" : `<button class="btn big" data-act="again">Nochmal 🔁</button>`}</div>
+      ${st().fish >= basketPrice() && commonLeft() > 0 ? `<button class="btn big pulse" data-act="nav" data-v="shop">🧺 Kätzchen-Körbchen öffnen!</button>` : ""}
+      <div class="row"><button class="btn ghost big" data-act="nav" data-v="home">Fertig</button>${(r.mode.kind === "retry" && !r.openLeft) || r.mode.show ? "" : `<button class="btn big" data-act="again">Nochmal 🔁</button>`}</div>
     </div>`;
     revealPending(r);
+    if (r.trick) setTimeout(() => { performTrick(document.getElementById("trickcat"), r.trick.trick); }, 900);
   }
 
   function revealPending(r) {
@@ -760,7 +792,7 @@
 
   // ------------------------------------------------------------------ Kätzchen & Freischaltungen
   const owned = (id) => st().cats.some((c) => c.id === id);
-  const commonLeft = () => CATS.filter((c) => !c.rare && !owned(c.id)).length;
+  const commonLeft = () => adoptPool().length;
 
   function checkUnlocks(returnList) {
     const s = st(), out = [];
@@ -774,11 +806,23 @@
   }
 
   function renderCats() {
+    checkWorlds();
     const s = st();
+    const open = WORLDS.filter((w, i) => worldOpen(i));
+    const tab = S.catTab && (S.catTab === "rare" || open.some((w) => w.id === S.catTab)) ? S.catTab : (curWorld() || open[open.length - 1]).id;
+    const list = tab === "rare" ? CATS.filter((c) => c.rare) : worldCats(tab);
+    const w = WORLDS.find((x) => x.id === tab);
     $app.innerHTML = `${topbar()}<main class="screen cats">
       <h1 class="title">Meine Kätzchen <small>${s.cats.length} / ${CATS.length}</small></h1>
       ${careCard()}
-      <div class="cat-grid">${CATS.map((c) => {
+      <div class="world-tabs">${WORLDS.map((x, i) => {
+        const have = worldCats(x.id).filter((c) => owned(c.id)).length, tot = worldCats(x.id).length;
+        return worldOpen(i) ? `<button class="world-tab ${tab === x.id ? "on" : ""}" style="--wc:${x.color}" data-act="cattab" data-k="${x.id}"><span>${x.emoji}</span><b>${esc(x.name)}</b><small>${have === tot ? "✔ komplett" : `${have} / ${tot}`}</small></button>`
+          : `<div class="world-tab locked"><span>🔒</span><b>???</b><small>Welt ${i + 1}</small></div>`;
+      }).join("")}
+        <button class="world-tab ${tab === "rare" ? "on" : ""}" style="--wc:#fef3c7" data-act="cattab" data-k="rare"><span>⭐</span><b>Seltene</b><small>${CATS.filter((c) => c.rare && owned(c.id)).length} / ${CATS.filter((c) => c.rare).length}</small></button></div>
+      <div class="world-head" style="--wc:${w ? w.color : "#fef3c7"}">${w ? `${w.emoji} <b>${esc(w.name)}</b> – ${worldFull(w.id) ? "alle gesammelt! 🎉" : "sammle alle, dann öffnet sich eine neue Welt!"}` : "⭐ Seltene Kätzchen gibt es nur für besondere Leistungen."}</div>
+      <div class="cat-grid">${list.map((c) => {
         const o = s.cats.find((x) => x.id === c.id);
         if (o) {
           const stg = stageOf(o);
@@ -789,7 +833,9 @@
         return `<div class="cat-tile locked ${c.rare ? "rare" : ""}">${catSVG(c, { silhouette: true, cls: "cat-md" })}
           <span>${c.rare ? "⭐ " + esc(c.unlock.text) : "🏆 Erfolg oder 🧺 Adoption"}</span></div>`;
       }).join("")}</div>
+      ${showCard()}
       ${achievementsHTML()}</main>${bottomnav("cats")}`;
+    showWorldNews();
   }
 
   function openCat(id) {
@@ -801,7 +847,7 @@
     const home = HOME_ITEMS.filter((h) => o.items.includes(h.id));
     showOverlay(`<div class="cat-detail">
       <div class="cat-scene">${hasItem(o, "tree") ? `<span class="scene-tree">${TREE_SVG}</span>` : ""}${hasItem(o, "hut") ? `<span class="scene-hut">${HUT_SVG}</span>` : ""}${hasItem(o, "bed") ? `<span class="scene-bed">${BED_SVG}</span>` : ""}
-        <button class="pet" data-act="pet" data-id="${id}">${catImg(o, { cls: "cat-xl" })}</button></div>
+        <button class="pet trick-wrap" data-act="pet" data-id="${id}">${catImg(o, { cls: "cat-xl" })}</button></div>
       <h2>${esc(c.name)}${c.rare ? " ⭐" : ""}</h2>
       <p class="stage">${stg.name}${stg.stars ? " " + "⭐".repeat(stg.stars) : ""} · ${heartsHTML(o)}</p>
       <div class="grow-bar" title="Wachstum"><i style="width:${growPct(o)}%"></i></div>
@@ -812,6 +858,7 @@
         <button class="care ${n.brushedToday ? "done" : n.messy ? "need" : ""}" data-act="brush" data-id="${id}"><span>🪮</span><small>${hasItem(o, "brush") ? (n.brushedToday ? "gebürstet" : "Bürsten") : "keine Bürste"}</small></button>
         <button class="care" data-act="treat" data-id="${id}"><span>🍪</span><small>Leckerli</small><em>${s.treats}</em></button>
       </div>
+      ${tricksHTML(o)}
       ${home.length ? `<p class="small muted">Gehört ${esc(c.name)}: ${home.map((h) => h.emoji + " " + h.name).join(" · ")}</p>` : ""}
       ${wear.length ? `<h3>Anziehen</h3>${wear.map(({ sl, items }) => `<div class="slot-row"><span class="slot-name">${sl.emoji} ${sl.name}</span>
         <div class="acc-row"><button class="acc ${!o.acc[sl.id] ? "on" : ""}" data-act="wear" data-id="${id}" data-slot="${sl.id}" data-acc="">✖️</button>
@@ -845,11 +892,193 @@
     setTimeout(() => { $overlay.querySelector(".reveal")?.classList.add("open"); sfx.fanfare(); confetti(); speak(`${c.name} zieht bei dir ein!`); }, 1100);
   }
 
+  // ------------------------------------------------------------------ Kätzchen-Welten
+  const worldOf = (c) => c.world || "home";
+  const worldCats = (wid) => CATS.filter((c) => !c.rare && worldOf(c) === wid);
+  const worldFull = (wid) => worldCats(wid).every((c) => owned(c.id));
+  function worldOpen(i) { for (let k = 0; k < i; k++) if (!worldFull(WORLDS[k].id)) return false; return true; }
+  function curWorld() { return WORLDS.find((w, i) => worldOpen(i) && !worldFull(w.id)) || null; }
+  function adoptPool() { const w = curWorld(); return w ? worldCats(w.id).filter((c) => !owned(c.id)) : []; }
+  const basketPrice = () => (curWorld() || WORLDS[WORLDS.length - 1]).price;
+  function checkWorlds() {
+    const s = st(); let n = 0;
+    WORLDS.forEach((w) => {
+      if (s.worldsDone.includes(w.id) || !worldFull(w.id)) return;
+      s.worldsDone.push(w.id); s.worldNews.push(w.id); n++;
+      const rwd = w.reward && R.ROOM_ITEMS.find((x) => x.id === w.reward);
+      if (rwd && !s.room.owned.includes(rwd.id)) { s.room.owned.push(rwd.id); if (!s.room.placed[rwd.spot]) s.room.placed[rwd.spot] = rwd.id; }
+      s.fish += 20;
+    });
+    if (n) saveState();
+    return n;
+  }
+  function showWorldNews() {
+    const s = st();
+    if (!s.worldNews.length || !$overlay.classList.contains("hidden")) return;
+    clearTimeout(showWorldNews._t);
+    showWorldNews._t = setTimeout(() => {
+      const s = st();
+      if (!s.worldNews.length || !$overlay.classList.contains("hidden") || !["home", "cats", "room", "shop"].includes(S.view)) return;
+      const wid = s.worldNews.shift(); saveState();
+      const w = WORLDS.find((x) => x.id === wid), next = WORLDS[WORLDS.indexOf(w) + 1];
+      const rw = R.ROOM_ITEMS.find((x) => x.id === w.reward);
+      showOverlay(`<div class="reveal open world-news" style="--wc:${(next || w).color}">
+        <div class="wn-emoji">${w.emoji}</div>
+        <h2>Alle ${esc(w.name)}-Kätzchen gesammelt! 🎉</h2>
+        <p>+20 🐟${rw ? ` und fürs Katzenzimmer: <b>${rw.emoji} ${esc(rw.name)}</b>` : ""}</p>
+        ${next ? `<div class="wn-next"><span>${next.emoji}</span><p>Neue Welt entdeckt:<br><b>${esc(next.name)}</b></p></div>
+          <div class="wn-cats">${worldCats(next.id).slice(0, 4).map((c) => catSVG(c, { silhouette: true, cls: "cat-sm" })).join("")}</div>
+          <p class="muted">${worldCats(next.id).length} neue Kätzchen warten auf dich – durch Erfolge 🏆 oder Adoption 🧺.</p>`
+          : `<p class="big">Du hast ALLE Kätzchen-Welten gesammelt! 👑</p>`}
+        <div class="row">${rw ? `<button class="btn ghost big" data-act="nav" data-v="room">🛋️ Ins Zimmer</button>` : ""}<button class="btn big" data-act="close">${next ? "Los geht's! 🐾" : "Juhu! 🎉"}</button></div></div>`, "reveal-sheet");
+      sfx.fanfare(); confetti(); speak(next ? `Neue Welt entdeckt: ${next.name}!` : "Du hast alle Kätzchen gesammelt!");
+    }, 700);
+  }
+
+  // ------------------------------------------------------------------ Tricks
+  function trainee() { const s = st(); return s.cats.find((c) => c.id === s.trainee) || favOwn(); }
+  const tricksOf = (c) => TRICKS.filter((t) => (c.tp || 0) >= t.tp);
+  const nextTrick = (c) => TRICKS.find((t) => (c.tp || 0) < t.tp) || null;
+  function performTrick(el, id) {
+    if (!el) return;
+    TRICKS.forEach((t) => el.classList.remove("t-" + t.id));
+    void el.offsetWidth;
+    el.classList.add("t-" + id);
+    clearTimeout(el._tt); el._tt = setTimeout(() => el.classList.remove("t-" + id), 1800);
+  }
+  function tricksHTML(o) {
+    const s = st(), learned = tricksOf(o), nt = nextTrick(o), isT = trainee() && trainee().id === o.id, name = Cats.byId(o.id).name;
+    return `<div class="tricks"><h3>🎓 Tricks <small>${learned.length} / ${TRICKS.length}</small></h3>
+      ${learned.length ? `<div class="trick-row">${learned.map((t) => `<button class="trick-btn" data-act="trick" data-id="${o.id}" data-t="${t.id}"><span>${t.emoji}</span><small>${t.name}</small></button>`).join("")}</div>`
+        : `<p class="small muted">${esc(name)} kann noch keine Tricks.</p>`}
+      ${nt ? `<p class="small">Nächster Trick: <b>${nt.emoji} ${nt.name}</b></p><div class="grow-bar train-bar"><i style="width:${Math.round((o.tp || 0) / nt.tp * 100)}%"></i></div><p class="small muted">${o.tp || 0} / ${nt.tp} Trainingspunkte</p>`
+        : `<p class="small">${esc(name)} kann schon alle Tricks! 🌟</p>`}
+      ${isT ? `<p class="badge">🎓 Wird gerade trainiert – jede gleich richtige Aufgabe = 1 Trainingspunkt</p>`
+        : `<button class="btn small" data-act="train" data-id="${o.id}">🎓 ${esc(name)} trainieren</button>`}</div>`;
+  }
+  function trainHTML(r) {
+    if (!r.train) return "";
+    const c = st().cats.find((x) => x.id === r.train.cat); if (!c) return "";
+    const name = Cats.byId(c.id).name;
+    if (r.trick) {
+      const t = TRICKS.find((x) => x.id === r.trick.trick);
+      return `<div class="trick-learned"><span class="trick-wrap" id="trickcat">${catImg(c, { cls: "cat-md", mood: "joy" })}</span>
+        <div><b>🎓 ${esc(name)} hat einen neuen Trick gelernt:</b><p class="big">${t.emoji} ${t.name}!</p>
+        <button class="btn small" data-act="trick" data-id="${c.id}" data-t="${t.id}" data-target="trickcat">Nochmal zeigen!</button></div></div>`;
+    }
+    if (!r.train.plus) return "";
+    const nt = nextTrick(c);
+    return `<div class="levelup train">🎓 ${esc(name)}: +${r.train.plus} ${r.train.plus === 1 ? "Trainingspunkt" : "Trainingspunkte"}${nt ? ` · ${nt.emoji} ${nt.name}: ${c.tp} / ${nt.tp}` : ""}</div>`;
+  }
+
+  // ------------------------------------------------------------------ Katzen-Show (einmal pro Woche)
+  const weekId = () => { const m = now(); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return isoDay(m); };
+  const showOpen = () => !!st().cats.length && st().showWeek !== weekId();
+  const JUDGES = [{ e: "🦉", n: "Frau Eule", k: "Pflege" }, { e: "🐶", n: "Herr Bello", k: "Outfit & Tricks" }, { e: "🐰", n: "Hoppel", k: "Rechnen" }];
+  const PLACES = { gold: { icon: "🥇", name: "Gold", fish: 30 }, silver: { icon: "🥈", name: "Silber", fish: 20 }, bronze: { icon: "🥉", name: "Bronze", fish: 12 }, ribbon: { icon: "🎀", name: "Schleife", fish: 6 } };
+  function showScores(c, rate) {
+    const n = needs(c), outfit = Math.min(4, Object.keys(c.acc || {}).length), tricks = tricksOf(c).length;
+    const clamp = (x) => Math.max(1, Math.min(5, Math.round(x)));
+    const care = clamp(c.hearts + (n.hunger ? -1 : 0) + (n.messy ? -1 : 0) + ((c.growth || 0) >= 25 ? 1 : 0));
+    const trickStars = tricks >= 6 ? 5 : tricks >= 4 ? 4 : tricks >= 2 ? 3 : tricks >= 1 ? 2 : 1;
+    const style = clamp(Math.ceil((outfit + 1 + trickStars) / 2));
+    const math = rate >= 0.9 ? 5 : rate >= 0.75 ? 4 : rate >= 0.6 ? 3 : rate >= 0.4 ? 2 : 1;
+    return [care, style, math];
+  }
+  function showCard() {
+    const s = st(); if (!s.cats.length) return "";
+    const open = showOpen(), last = s.trophies[s.trophies.length - 1];
+    return `<section class="show-card ${open ? "open" : ""}"><span class="sc-e">🎪</span>
+      <div><b>Katzen-Show</b><small>${open ? "Diese Woche ist Show! Mach dein Kätzchen schick und zeig, was ihr könnt." : `Nächste Show ab Montag.${last ? ` Zuletzt: ${last.icon} mit ${esc(Cats.byId(last.cat).name)}` : ""}`}</small>
+      ${s.trophies.length ? `<small class="trophies">Pokale: ${s.trophies.slice(-12).map((t) => t.icon).join("")}</small>` : ""}</div>
+      ${open ? `<button class="btn small" data-act="showopen">Mitmachen!</button>` : ""}</section>`;
+  }
+  function showDialog() {
+    const s = st();
+    if (!showOpen()) { toast("Die Show war diese Woche schon – die nächste gibt es ab Montag! 🎪", 3500); return; }
+    const score = (c) => c.hearts + Object.keys(c.acc || {}).length + tricksOf(c).length;
+    const cats = s.cats.slice().sort((a, b) => score(b) - score(a));
+    showOverlay(`<h2>🎪 Katzen-Show</h2>
+      <div class="jury">${JUDGES.map((j) => `<span><i>${j.e}</i><b>${j.n}</b><small>${j.k}</small></span>`).join("")}</div>
+      <p class="small">Satt, gebürstet und glücklich? Schick angezogen? Tricks gelernt? Dann zeigt ihr bei <b>8 Rechenaufgaben</b> euren Auftritt!</p>
+      <h3>Wer tritt auf?</h3>
+      <div class="pick-cats">${cats.map((c) => `<button class="pick-cat" data-act="showstart" data-id="${c.id}">${catImg(c, { cls: "cat-sm" })}
+        <span>${esc(Cats.byId(c.id).name)}</span><small>❤️${c.hearts} · 🎀${Object.keys(c.acc || {}).length} · 🎓${tricksOf(c).length}</small></button>`).join("")}</div>
+      <button class="btn ghost" data-act="close">Später</button>`);
+  }
+  function showResultHTML(r) {
+    const c = st().cats.find((x) => x.id === r.show.cat), P = PLACES[r.show.place], name = Cats.byId(r.show.cat).name;
+    return `<div class="show-stage"><h1>🎪 Katzen-Show</h1>
+      <div class="show-cat">${c ? catImg(c, { mood: "joy", cls: "cat-lg jump" }) : ""}<p><b>${esc(name)}</b> auf der Bühne</p></div>
+      <div class="judges">${JUDGES.map((j, i) => `<div class="judge" style="animation-delay:${0.5 + i * 0.7}s"><span class="je">${j.e}</span><small>${j.n}</small>
+        <b>${"⭐".repeat(r.show.scores[i])}<span class="dim">${"⭐".repeat(5 - r.show.scores[i])}</span></b><small class="muted">${j.k}</small></div>`).join("")}</div>
+      <div class="medal" style="animation-delay:2.7s"><span>${P.icon}</span><b>${P.name}!</b><small>+${P.fish} 🐟 · Pokal fürs Zimmer</small></div></div>`;
+  }
+
+  // ------------------------------------------------------------------ Katzenzimmer
+  const ROOM_POS = [{ l: 42, b: 3 }, { l: 9, b: 2 }, { l: 62, b: 5 }, { l: 25, b: 15 }, { l: 49, b: 19 }, { l: 71, b: 17 }, { l: 8, b: 18 }, { l: 77, b: 1 }];
+  function roomCats() {
+    const s = st(), has = (id) => s.cats.some((c) => c.id === id);
+    S.roomPick = (S.roomPick || []).filter(has);
+    if (!S.roomPick.length) S.roomPick = (has(s.fav) ? [s.fav] : []).concat(GEN.shuffle(s.cats.filter((c) => c.id !== s.fav).map((c) => c.id))).slice(0, 8);
+    return S.roomPick.map((id) => s.cats.find((c) => c.id === id));
+  }
+  function renderRoom() {
+    checkWorlds();
+    const s = st(), d = now(), part = R.dayPart(d), p = s.room.placed, night = part === "night";
+    const pos = ROOM_POS.map((x) => Object.assign({}, x));
+    if (["sofa", "hay", "throne"].includes(p.left)) pos[6] = { l: 7, b: p.left === "throne" ? 34 : 27, seat: true };
+    const hello = { morning: "Guten Morgen! ☀️", day: "Die Kätzchen spielen 🧶", evening: "Guten Abend! 🌇", night: "Psst… alle schlafen 🌙" }[part];
+    $app.innerHTML = `${topbar()}<main class="screen room">
+      <h1 class="title">Katzenzimmer <small>${hello}</small></h1>
+      <div class="room-box">${R.roomSVG(s.room, s.trophies, d)}
+        ${roomCats().map((c, i) => { const q = pos[i % pos.length];
+          return `<button class="room-cat ${night || q.seat ? "" : "wander"}" style="left:${q.l}%;bottom:${q.b}%;z-index:${100 - Math.round(q.b)};animation-duration:${(6 + (i * 1.7) % 5).toFixed(1)}s;animation-delay:-${(i * 1.3).toFixed(1)}s" data-act="roomcat" data-id="${c.id}">
+            <span class="trick-wrap">${catImg(c, night ? { cls: "cat-room", mood: "sleep" } : { cls: "cat-room" })}</span><i>${esc(Cats.byId(c.id).name)}</i></button>`; }).join("")}
+      </div>
+      <p class="small muted center">Tippe ein Kätzchen an – es zeigt dir einen Trick!</p>
+      <div class="row room-actions">${s.cats.length > 8 ? `<button class="btn ghost small" data-act="roomshuffle">🔀 Andere Kätzchen</button>` : ""}<button class="btn small ${S.roomEdit ? "ghost" : ""}" data-act="roomedit">${S.roomEdit ? "✔ Fertig" : "🎨 Einrichten"}</button></div>
+      ${S.roomEdit ? roomEditor() : ""}
+      ${showCard()}
+    </main>${bottomnav("room")}`;
+    showWorldNews();
+  }
+  function roomEditor() {
+    const s = st(), tab = S.roomTab || "left", cur = s.room.placed[tab];
+    const items = R.ROOM_ITEMS.filter((x) => x.spot === tab && (!x.world || s.room.owned.includes(x.id)));
+    const missingReward = R.ROOM_ITEMS.some((x) => x.spot === tab && x.world && !s.room.owned.includes(x.id));
+    return `<section class="room-edit">
+      <div class="chips">${R.SPOTS.map((sp) => `<button class="chip ${tab === sp.id ? "on" : ""}" data-act="roomtab" data-k="${sp.id}">${sp.emoji} ${sp.name}</button>`).join("")}</div>
+      <div class="room-items">
+        <button class="room-item ${!cur ? "on" : ""}" data-act="roomplace" data-spot="${tab}" data-id=""><span>${tab === "wall" || tab === "floor" ? "🏠" : "✖️"}</span><small>${tab === "wall" || tab === "floor" ? "Standard" : "Nichts"}</small></button>
+        ${items.map((x) => { const has = s.room.owned.includes(x.id);
+          return `<button class="room-item ${cur === x.id ? "on" : ""} ${has ? "" : "buy"}" data-act="${has ? "roomplace" : "roombuy"}" data-spot="${tab}" data-id="${x.id}" ${!has && s.fish < x.price ? "disabled" : ""}>
+            <span>${x.emoji}</span><small>${esc(x.name)}</small>${has ? (x.world ? `<em>🏆</em>` : "") : `<em>${x.price} 🐟</em>`}</button>`; }).join("")}
+      </div>
+      ${missingReward ? `<p class="small muted">🏆 Hier gibt es noch etwas Besonderes – als Belohnung für eine vollständige Kätzchen-Welt.</p>` : ""}
+    </section>`;
+  }
+  function roomBuy(id) {
+    const s = st(), x = R.ROOM_ITEMS.find((i) => i.id === id);
+    if (!x || x.world || s.room.owned.includes(id) || s.fish < x.price) return;
+    s.fish -= x.price; s.room.owned.push(id); s.room.placed[x.spot] = id;
+    sfx.coin(); saveState(); render(); confetti(); toast(`${x.emoji} ${x.name} steht jetzt im Katzenzimmer! 😻`, 3000);
+  }
+  function roomCatTap(el, id) {
+    const c = st().cats.find((x) => x.id === id); if (!c) return;
+    const name = Cats.byId(id).name;
+    if (R.dayPart(now()) === "night") { meow(0.8); toast(`Psst… ${name} schläft 😴`); return; }
+    const learned = tricksOf(c);
+    performTrick(el.querySelector(".trick-wrap"), learned.length ? pick(learned).id : "jump");
+    catTap(id);
+    if (!learned.length) setTimeout(() => toast(`${name} kann noch keine Tricks – trainiere ${name} im Kätzchen-Menü 🎓`, 3200), 400);
+  }
 
   // ------------------------------------------------------------------ Kätzchen-Leben (Tamagotchi)
   const FOOD = [
     { id: "food", name: "Futterdose", emoji: "🥫", price: 3, food: 1, desc: "1 Mahlzeit für 1 Kätzchen" },
     { id: "foodpack", name: "Vorratspaket", emoji: "📦", price: 13, food: 5, desc: "5 Futterdosen – 2 🐟 gespart" },
+    { id: "foodsack", name: "Großer Futtersack", emoji: "🛍️", price: 30, food: 20, desc: "20 Futterdosen – 30 🐟 gespart" },
     { id: "treat", name: "Leckerli", emoji: "🍪", price: 2, treat: 1, desc: "+1 ❤️ für ein Kätzchen" },
     { id: "sardines", name: "Sardinen", emoji: "🐟", price: 5, sardine: 1, desc: "Festmahl: macht satt und +1 ❤️" },
   ];
@@ -1044,12 +1273,14 @@
     { key: "fixed", icon: "🔧", tiers: [10, 25, 50, 75, 100], cur: (s) => s.fixed_total, label: (n) => `${n} Fehler in der Werkstatt ausbessern` },
     { key: "grade", icon: "📝", tiers: [1, 3, 5, 10], cur: (s) => s.grade1, label: (n) => n === 1 ? "Einen Test mit Note 1 schaffen" : `${n} Tests mit Note 1` },
     { key: "care", icon: "🐱", tiers: [1, 2, 4, 8, 12], cur: (s) => s.careWeeks, label: (n) => n === 1 ? "Eine Schulwoche alle Kätzchen füttern" : `${n} Schulwochen alle Kätzchen füttern` },
+    { key: "tricks", icon: "🎓", tiers: [3, 8, 15, 25, 40], cur: (s) => s.cats.reduce((a, c) => a + tricksOf(c).length, 0), label: (n) => `${n} Tricks beibringen` },
+    { key: "show", icon: "🥇", tiers: [1, 3, 6, 10], cur: (s) => s.showGold, label: (n) => n === 1 ? "Gold bei der Katzen-Show gewinnen" : `${n}× Gold bei der Katzen-Show gewinnen` },
   ];
   function checkAchievements() {
     const s = st(); let n = 0;
     ACH_GROUPS.forEach((g) => g.tiers.forEach((t) => {
       const id = g.key + t, val = (g.best || g.cur)(s);
-      if (!s.achieved.includes(id) && val >= t) { s.achieved.push(id); addGift("achievement", { text: g.label(t).replace("üben", "geübt").replace("ausbessern", "ausgebessert").replace("schaffen", "geschafft").replace("füttern", "gefüttert") }); n++; }
+      if (!s.achieved.includes(id) && val >= t) { s.achieved.push(id); addGift("achievement", { text: g.label(t).replace("üben", "geübt").replace("ausbessern", "ausgebessert").replace("schaffen", "geschafft").replace("füttern", "gefüttert").replace("beibringen", "beigebracht").replace("gewinnen", "gewonnen") }); n++; }
     }));
     if (n) saveState();
     return n;
@@ -1128,7 +1359,7 @@
 
   function rollGift(g) {
     const secret = itemPool("secret"), evItems = itemPool("event"), ev = currentEvent();
-    const kittens = CATS.filter((c) => !c.rare && !owned(c.id));
+    const kittens = adoptPool();
     const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
     if (g.kind === "achievement") {
       const title = `🏆 ${g.text}`;
@@ -1192,7 +1423,7 @@
       body = `${f ? catImg(f, { mood: "joy", cls: "cat-lg jump" }) : ""}
         <p class="big">${a.emoji} <b>${esc(a.name)}</b></p><p class="muted">${f ? esc(Cats.byId(f.id).name) + " trägt es schon!" : ""}${a.surprise ? " Das gibt es in keinem Laden." : ""}</p>`;
     } else if (rw.type === "kitten") {
-      s.cats.push(newCat(rw.cat));
+      s.cats.push(newCat(rw.cat)); checkWorlds();
       body = `${catSVG(rw.cat, { mood: "joy", cls: "cat-lg jump stage-baby" })}<p class="big"><b>${esc(Cats.byId(rw.cat).name)}</b> zieht bei dir ein!</p><p class="muted">Vergiss nicht: Futter, Bürste und ganz viel Rechnen 😺</p>`;
     }
     if (rw.bonus) { s.fish += rw.bonus; body += `<p>+ ${rw.bonus} 🐟 Bonus</p>`; }
@@ -1221,7 +1452,7 @@
   }
 
   function renderShop() {
-    const s = st(), left = commonLeft(), tab = S.shopTab || "all", ev = currentEvent(), nx = nextEvent();
+    const s = st(), left = commonLeft(), tab = S.shopTab || "all", ev = currentEvent(), nx = nextEvent(), cw = curWorld(), bp = basketPrice();
     const normal = ACCESSORIES.filter((a) => !a.event && (tab === "all" || a.slot === tab));
     const evItems = ev ? ACCESSORIES.filter((a) => a.event === ev.id) : [];
     $app.innerHTML = `${topbar()}<main class="screen shop">
@@ -1235,6 +1466,8 @@
         : nx ? `<div class="event-next">${nx.emoji} Bald: <b>${nx.name}</b> ab ${fmtDay(nx.from)} – dann gibt es hier besondere Sachen!</div>` : ""}
       <h2 class="sec">🏠 Zuhause</h2>
       <div class="acc-shop">${HOME_ITEMS.map((a) => shopCard(a)).join("")}</div>
+      <div class="event-next room-hint">🛋️ Möbel, Tapeten &amp; Spielzeug fürs <b>Katzenzimmer</b> gibt es direkt im Zimmer unter 🎨 Einrichten.
+        <button class="btn small" data-act="nav" data-v="room">Zum Zimmer</button></div>
       <h2 class="sec">🎀 Zum Anziehen</h2>
       <div class="chips shop-tabs">${[{ id: "all", emoji: "✨", name: "Alles" }].concat(SLOTS).map((sl) => `<button class="chip ${tab === sl.id ? "on" : ""}" data-act="shoptab" data-k="${sl.id}">${sl.emoji} ${sl.name}</button>`).join("")}</div>
       <div class="acc-shop">${normal.map((a) => {
@@ -1246,20 +1479,20 @@
       <h2 class="sec">🧺 Neues Kätzchen adoptieren</h2>
       <section class="shop-basket">
         <div class="bk">🧺</div>
-        <div><p>Neue Kätzchen bekommst du für <b>Erfolge</b> 🏆 – oder du adoptierst eines.</p>
-        <button class="btn big" data-act="buybasket" ${s.fish < BASKET_PRICE || !left ? "disabled" : ""}>Adoptieren · ${BASKET_PRICE} 🐟</button>
-        ${!left ? `<p class="small">Alle Kätzchen wohnen schon bei dir! 🎉</p>` : s.fish < BASKET_PRICE ? `<p class="small">Noch ${BASKET_PRICE - s.fish} Fischlein.</p>` : ""}</div>
+        <div><p>Neue Kätzchen bekommst du für <b>Erfolge</b> 🏆 – oder du adoptierst eines${cw ? ` aus der Welt <b>${cw.emoji} ${esc(cw.name)}</b> (noch ${left} ${left === 1 ? "Kätzchen" : "Kätzchen"})` : ""}.</p>
+        <button class="btn big" data-act="buybasket" ${s.fish < bp || !left ? "disabled" : ""}>Adoptieren · ${bp} 🐟</button>
+        ${!left ? `<p class="small">Alle Kätzchen aus allen Welten wohnen schon bei dir! 👑</p>` : s.fish < bp ? `<p class="small">Noch ${bp - s.fish} Fischlein.</p>` : ""}</div>
       </section></main>${bottomnav("shop")}`;
   }
 
   function buyBasket() {
     const s = st();
-    const pool = CATS.filter((c) => !c.rare && !owned(c.id));
-    if (s.fish < BASKET_PRICE || !pool.length) return;
-    s.fish -= BASKET_PRICE;
+    const pool = adoptPool(), price = basketPrice();
+    if (s.fish < price || !pool.length) return;
+    s.fish -= price;
     const c = pick(pool);
     s.cats.push(newCat(c.id));
-    saveState(); render(); revealCat(c.id, false);
+    checkWorlds(); saveState(); render(); revealCat(c.id, false);
   }
 
   function buyFood(id) {
@@ -1782,8 +2015,9 @@
         case "mute": S.muted = !S.muted; store("mk_muted", S.muted ? "1" : "0"); if (S.muted && "speechSynthesis" in window) speechSynthesis.cancel(); render(); break;
         case "starter": document.querySelectorAll(".starter-cat").forEach((b) => b.classList.toggle("on", b === el)); sfx.tap(); break;
         case "createprofile": await createProfile(); break;
-        case "close": hideOverlay(); if (["cats", "shop", "home", "result"].includes(S.view)) render(); break;
+        case "close": hideOverlay(); if (["cats", "shop", "home", "result", "room"].includes(S.view)) render(); break;
         case "nav":
+          hideOverlay();
           if (d.v === "parent") { if (S.pin) { S.view = "parent"; await loadAdmin(); render(); } else pinDialog(); break; }
           S.view = d.v; render(); break;
         case "petfav": { const fc = favCat(); if (!fc.cat) break; catTap(fc.cat.id); el.innerHTML = catImg(fc.cat, { mood: "joy", cls: "cat-lg jump" }); setTimeout(() => S.view === "home" && !document.querySelector("#overlay:not(.hidden)") && render(), 1400); break; }
@@ -1826,6 +2060,20 @@
         case "opengift": openGift(); break;
         case "setfav": st().fav = d.id; saveState(); openCat(d.id); render(); break;
         case "buybasket": buyBasket(); break;
+        case "cattab": S.catTab = d.k; render(); break;
+        case "train": st().trainee = d.id; saveState(); toast(`🎓 Ab jetzt trainierst du ${Cats.byId(d.id).name}!`); openCat(d.id); break;
+        case "trick": {
+          const tgt = d.target ? document.getElementById(d.target) : $overlay.querySelector(".cat-detail .trick-wrap");
+          performTrick(tgt, d.t); meow(1.2); break;
+        }
+        case "roomcat": roomCatTap(el, d.id); break;
+        case "roomedit": S.roomEdit = !S.roomEdit; render(); break;
+        case "roomtab": S.roomTab = d.k; render(); break;
+        case "roomplace": { const r = st().room; if (d.id) r.placed[d.spot] = d.id; else delete r.placed[d.spot]; saveState(); sfx.tap(); render(); break; }
+        case "roombuy": roomBuy(d.id); break;
+        case "roomshuffle": S.roomPick = null; render(); break;
+        case "showopen": showDialog(); break;
+        case "showstart": hideOverlay(); startGame({ kind: "mix", level: mixLevel(), show: d.id, n: 8 }); break;
         // Eltern
         case "leaveparent": S.view = S.profile ? "home" : "profiles"; S.pin = null; await refreshBoot(); render(); break;
         case "ptab": S.parentTab = d.k; renderParent(); break;

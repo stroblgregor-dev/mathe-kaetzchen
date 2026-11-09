@@ -7,7 +7,8 @@ Reine Web-App (PWA) ohne Server: läuft auf GitHub Pages, wird am Handy installi
   Ergänzen, Rechenrätsel (Rechendreiecke, Zahlenmauern, Zahlenhäuser, Zahlenfamilien, „Die kleine Aufgabe hilft“),
   Verdoppeln & Halbieren, Einmaleins & Teilen, Geld, Uhr, Zeit & Kalender, Längen, Gewicht & Liter, Formen & Körper,
   Zahlenfolgen, Forschen & Entdecken (Sudoku, Zauberdreieck/-quadrat, Kryptogramm),
-  Rechengeschichten. Kätzchen-Leben (Futter, Pflege, Herzen, Wachsen), Laden, Erfolge, Jahreszeiten.
+  Rechengeschichten. Kätzchen-Leben (Futter, Pflege, Herzen, Wachsen), Laden, Erfolge, Jahreszeiten,
+  65 Kätzchen in 6 Kätzchen-Welten, Katzenzimmer zum Einrichten, Tricks beibringen, wöchentliche Katzen-Show.
 - **Eltern (🔒 PIN, Start 1234):** Fortschritt, Lernzettel fotografieren → Claude baut ein Lernpaket,
   KI-Pakete erstellen, Pakete prüfen/freischalten, Einstellungen, Sicherung.
 

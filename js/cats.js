@@ -35,6 +35,75 @@
       unlock: { type: "fixed", n: 15, text: "15 Fehler in der Werkstatt ausbessern" } },
     { id: "mondi",     name: "Mondi",      fur: "#33407a", dark: "#1e2754", belly: "#5b6bb5", eye: "#fde68a", pattern: "magic", rare: true,
       unlock: { type: "packstar", n: 1, text: "Ein Schul-Paket mit 3 Sternen schaffen" } },
+    // ---- Welt 2: Bauernhof
+    { id: "heu",       name: "Heu",        fur: "#e9c46a", dark: "#c99a35", belly: "#fff3cf", eye: "#4f9a3c", pattern: "plain", fluff: true, world: "farm" },
+    { id: "muh",       name: "Muh",        fur: "#ffffff", dark: "#2b2b33", belly: "#ffffff", eye: "#8b5a2b", pattern: "cow", world: "farm" },
+    { id: "kiesel",    name: "Kiesel",     fur: "#b8b2a7", dark: "#7d776d", belly: "#ece8e1", eye: "#d4a017", pattern: "tabby", world: "farm" },
+    { id: "butter",    name: "Butter",     fur: "#fbe7a1", dark: "#e3c565", belly: "#fffaf0", eye: "#c2792c", pattern: "plain", ears: "fold", world: "farm" },
+    { id: "moehre",    name: "Möhre",      fur: "#f08a3c", dark: "#c4611c", belly: "#ffffff", eye: "#3fa34d", pattern: "bicolor", world: "farm" },
+    { id: "gockel",    name: "Gockel",     fur: "#fbf5ec", dark: "#c0392b", belly: "#ffffff", eye: "#e8a33c", pattern: "calico", patch: "#e9a23b", world: "farm" },
+    { id: "wolli",     name: "Wolli",      fur: "#f5f1ea", dark: "#ddd5c8", belly: "#ffffff", eye: "#6b8fd6", pattern: "plain", fluff: true, ears: "fold", world: "farm" },
+    { id: "strolch",   name: "Strolch",    fur: "#9ca0a6", dark: "#3d4047", belly: "#e7e8ea", eye: "#f2c14e", pattern: "mask", world: "farm" },
+    // ---- Welt 3: Wald
+    { id: "luchsi",    name: "Luchsi",     fur: "#d8b48a", dark: "#7a5434", belly: "#f6e8d6", eye: "#c9a227", pattern: "spots", ears: "tuft", fluff: true, world: "forest" },
+    { id: "fuchsi",    name: "Fuchsi",     fur: "#e8743b", dark: "#3b2a22", belly: "#ffffff", eye: "#d9a520", pattern: "socks", world: "forest" },
+    { id: "eichel",    name: "Eichel",     fur: "#8d5b3a", dark: "#5c3820", belly: "#d9b896", eye: "#7bbf4a", pattern: "tabby", world: "forest" },
+    { id: "pilzi",     name: "Pilzi",      fur: "#e5484d", dark: "#ffffff", belly: "#fff1e6", eye: "#5b3a1e", pattern: "dots", world: "forest" },
+    { id: "moosi",     name: "Moosi",      fur: "#9bb08a", dark: "#5f7a4f", belly: "#e3ecd9", eye: "#f2c14e", pattern: "tabby", world: "forest" },
+    { id: "eulchen",   name: "Eulchen",    fur: "#a68a6d", dark: "#5e4632", belly: "#efe2cf", eye: "#f59e0b", pattern: "mask", ears: "tuft", world: "forest" },
+    { id: "brombeere", name: "Brombeere",  fur: "#5b3a6b", dark: "#3a2245", belly: "#9d7bb0", eye: "#a3e635", pattern: "plain", world: "forest" },
+    { id: "tanne",     name: "Tanne",      fur: "#4f6d5a", dark: "#2f4638", belly: "#d4e4d0", eye: "#fbbf24", pattern: "socks", fluff: true, world: "forest" },
+    // ---- Welt 4: Märchenschloss
+    { id: "rosalie",   name: "Rosalie",    fur: "#f9c6dc", dark: "#ec89b5", belly: "#fff0f6", eye: "#7c3aed", pattern: "glitter", fluff: true, world: "castle" },
+    { id: "ritter",    name: "Ritter Rudi",fur: "#c3c9d1", dark: "#5f6b7a", belly: "#eef1f4", eye: "#2563eb", pattern: "points", world: "castle" },
+    { id: "zaubi",     name: "Zaubi",      fur: "#6d4bb8", dark: "#3b2a7a", belly: "#c4b5fd", eye: "#fde047", pattern: "galaxy", world: "castle" },
+    { id: "drachi",    name: "Drachi",     fur: "#5fbf77", dark: "#2f8a4a", belly: "#e2f5c9", eye: "#f97316", pattern: "scales", ears: "big", world: "castle" },
+    { id: "kroenchen", name: "Krönchen",   fur: "#f7d774", dark: "#d9a520", belly: "#fff8dc", eye: "#db2777", pattern: "glitter", world: "castle" },
+    { id: "schneeweiss",name: "Schneeweiß",fur: "#ffffff", dark: "#e6e9f0", belly: "#ffffff", eye: "#3b82f6", pattern: "plain", fluff: true, world: "castle" },
+    { id: "kobold",    name: "Kobold",     fur: "#d9822b", dark: "#8f4f12", belly: "#f6d7a7", eye: "#22c55e", pattern: "tabby", ears: "big", world: "castle" },
+    { id: "herzi",     name: "Herzi",      fur: "#ffffff", dark: "#ef476f", belly: "#ffffff", eye: "#ef476f", pattern: "heart", world: "castle" },
+    // ---- Welt 5: Meer
+    { id: "welle",     name: "Welle",      fur: "#7fb3d5", dark: "#3f7cac", belly: "#e6f2fa", eye: "#f2c14e", pattern: "tabby", world: "sea" },
+    { id: "muschel",   name: "Muschel",    fur: "#f8d7c4", dark: "#e3a587", belly: "#fff6f0", eye: "#14b8a6", pattern: "points", world: "sea" },
+    { id: "koralle",   name: "Koralle",    fur: "#ff8c69", dark: "#e0563a", belly: "#ffe3d8", eye: "#0ea5e9", pattern: "spots", world: "sea" },
+    { id: "perle",     name: "Perle",      fur: "#f4f1fb", dark: "#c9c0e8", belly: "#ffffff", eye: "#a855f7", pattern: "glitter", world: "sea" },
+    { id: "nixi",      name: "Nixi",       fur: "#4fc3c8", dark: "#1f8f97", belly: "#d8f6f5", eye: "#ec4899", pattern: "scales", world: "sea" },
+    { id: "kapitaen",  name: "Kapitän",    fur: "#2c3e66", dark: "#18233d", belly: "#ffffff", eye: "#f2c14e", pattern: "tux", world: "sea" },
+    { id: "seestern",  name: "Seestern",   fur: "#f6a04d", dark: "#fff7d6", belly: "#ffe9cc", eye: "#2563eb", pattern: "stars", world: "sea" },
+    { id: "delfi",     name: "Delfi",      fur: "#8fa3b8", dark: "#5c7189", belly: "#eef3f8", eye: "#38bdf8", pattern: "plain", ears: "fold", world: "sea" },
+    // ---- Welt 6: Weltraum
+    { id: "komet",     name: "Komet",      fur: "#eef2ff", dark: "#60a5fa", belly: "#ffffff", eye: "#2563eb", pattern: "streaks", world: "space" },
+    { id: "galaxie",   name: "Galaxie",    fur: "#1e1b4b", dark: "#0f0c2e", belly: "#4c4597", eye: "#f0abfc", pattern: "galaxy", world: "space" },
+    { id: "rakete",    name: "Rakete",     fur: "#ef4444", dark: "#9ca3af", belly: "#fee2e2", eye: "#facc15", pattern: "socks", world: "space" },
+    { id: "saturn",    name: "Saturn",     fur: "#e9b872", dark: "#a8642a", belly: "#fbe6c4", eye: "#7c3aed", pattern: "ring", world: "space" },
+    { id: "mars",      name: "Mars",       fur: "#c2410c", dark: "#7c2d12", belly: "#fdba74", eye: "#22d3ee", pattern: "spots", world: "space" },
+    { id: "zorbi",     name: "Zorbi",      fur: "#a3e635", dark: "#65a30d", belly: "#ecfccb", eye: "#7c3aed", pattern: "plain", ears: "big", world: "space" },
+    { id: "sternschnuppe", name: "Sternschnuppe", fur: "#fde68a", dark: "#f59e0b", belly: "#fffbeb", eye: "#0ea5e9", pattern: "stars", world: "space" },
+    { id: "nebula",    name: "Nebula",     fur: "#7c3aed", dark: "#4c1d95", belly: "#ddd6fe", eye: "#fde047", pattern: "galaxy", fluff: true, world: "space" },
+  ];
+
+  // Kätzchen-Welten: die nächste Welt öffnet sich, wenn alle Kätzchen der vorigen eingezogen sind
+  const WORLDS = [
+    { id: "home",   name: "Zuhause",        emoji: "🏡", color: "#fde2e4", price: 80,  reward: "familyphoto" },
+    { id: "farm",   name: "Bauernhof",      emoji: "🌾", color: "#fef3c7", price: 90,  reward: "hay" },
+    { id: "forest", name: "Wald",           emoji: "🌲", color: "#dcfce7", price: 100, reward: "mushroomhouse" },
+    { id: "castle", name: "Märchenschloss", emoji: "🏰", color: "#f3e8ff", price: 110, reward: "throne" },
+    { id: "sea",    name: "Meer",           emoji: "🌊", color: "#e0f2fe", price: 120, reward: "treasure" },
+    { id: "space",  name: "Weltraum",       emoji: "🚀", color: "#e0e7ff", price: 130, reward: "rocket" },
+  ];
+  CATS.forEach((c) => { if (!c.rare && !c.world) c.world = "home"; });
+
+  // Tricks: das Trainings-Kätzchen sammelt Trainingspunkte (jede gleich richtige Aufgabe = 1)
+  const TRICKS = [
+    { id: "paw",   name: "Pfote geben",     emoji: "🐾", tp: 10 },
+    { id: "jump",  name: "Hochspringen",    emoji: "⬆️", tp: 20 },
+    { id: "roll",  name: "Rolle",           emoji: "🔄", tp: 35 },
+    { id: "stand", name: "Männchen machen", emoji: "🧍", tp: 50 },
+    { id: "wave",  name: "Winken",          emoji: "👋", tp: 70 },
+    { id: "dance", name: "Tanzen",          emoji: "💃", tp: 90 },
+    { id: "spin",  name: "Kreisel",         emoji: "🌀", tp: 115 },
+    { id: "bow",   name: "Verbeugen",       emoji: "🙇", tp: 140 },
+    { id: "flip",  name: "Salto",           emoji: "🤸", tp: 170 },
   ];
 
   // slot: head | face | neck | body | back | extra  ·  surprise: nur aus Überraschungs-Geschenken
@@ -131,6 +200,66 @@
       case "magic":
         return `<g clip-path="url(#${clip})" fill="#fde68a">
           ${star(60, 150, 7)}${star(142, 160, 6)}${star(128, 136, 4)}${star(70, 52, 5)}${star(136, 56, 4)}${star(80, 180, 4)}
+        </g>`;
+      case "cow":
+        return `<g clip-path="url(#${clip})" fill="${d}">
+          <path d="M40 50 Q62 30 84 46 Q80 70 56 72 Q40 68 40 50 Z"/><path d="M128 76 Q150 60 166 80 Q160 100 140 98 Q126 92 128 76 Z"/>
+          <path d="M50 140 Q70 128 82 146 Q78 170 58 168 Q46 158 50 140 Z"/><path d="M120 168 Q140 156 152 172 Q148 196 128 192 Q116 182 120 168 Z"/>
+          <polygon points="48,62 54,14 92,44"/>
+        </g>`;
+      case "bicolor":
+        return `<g clip-path="url(#${clip})" fill="#ffffff">
+          <path d="M100 52 L88 100 Q86 128 100 132 Q114 128 112 100 Z"/><ellipse cx="100" cy="170" rx="34" ry="34"/>
+        </g>`;
+      case "mask":
+        return `<g clip-path="url(#${clip})" fill="${d}" opacity="0.9">
+          <path d="M40 92 Q60 70 100 84 Q140 70 160 92 Q150 106 126 104 Q110 100 100 96 Q90 100 74 104 Q50 106 40 92 Z"/>
+        </g>`;
+      case "socks":
+        return `<g clip-path="url(#${clip})" fill="${d}">
+          <polygon points="48,62 54,14 92,44"/><polygon points="152,62 146,14 108,44"/>
+          <rect x="40" y="186" width="120" height="30"/>
+        </g>`;
+      case "dots":
+        return `<g clip-path="url(#${clip})" fill="${d}">
+          <circle cx="70" cy="56" r="10"/><circle cx="130" cy="54" r="8"/><circle cx="100" cy="44" r="6"/><circle cx="48" cy="96" r="6"/><circle cx="152" cy="96" r="7"/>
+          <circle cx="62" cy="150" r="9"/><circle cx="138" cy="146" r="8"/><circle cx="68" cy="182" r="6"/><circle cx="134" cy="182" r="7"/>
+        </g>`;
+      case "glitter":
+        return `<g clip-path="url(#${clip})">
+          ${[[62, 56, 6, "#fff"], [138, 58, 5, "#fff"], [120, 44, 3.5, d], [52, 96, 4, d], [150, 98, 4, "#fff"], [64, 148, 6, d], [138, 152, 6, "#fff"],
+             [124, 134, 3.5, d], [74, 182, 4, "#fff"], [130, 184, 4, d], [82, 48, 3, d]].map(([x, y, r, f]) => star(x, y, r).replace("<polygon", `<polygon fill="${f}"`)).join("")}
+        </g>`;
+      case "galaxy":
+        return `<g clip-path="url(#${clip})">
+          <ellipse cx="72" cy="150" rx="30" ry="16" fill="#ec4899" opacity=".35" transform="rotate(-25 72 150)"/>
+          <ellipse cx="132" cy="62" rx="26" ry="13" fill="#38bdf8" opacity=".35" transform="rotate(20 132 62)"/>
+          <ellipse cx="140" cy="168" rx="20" ry="10" fill="#a78bfa" opacity=".45"/>
+          ${[[60, 56, 3], [140, 152, 4], [120, 132, 2.5], [56, 100, 2.5], [150, 96, 3], [78, 182, 3], [104, 46, 2.5], [126, 186, 2]].map(([x, y, r]) => star(x, y, r).replace("<polygon", `<polygon fill="#fef9c3"`)).join("")}
+        </g>`;
+      case "scales":
+        return `<g clip-path="url(#${clip})" fill="none" stroke="${d}" stroke-width="3" opacity="0.75">
+          ${[130, 146, 162, 178, 194].map((y, r) => [0, 1, 2, 3, 4, 5].map((i) => `<path d="M${46 + i * 22 + (r % 2) * 11} ${y} q11 12 22 0"/>`).join("")).join("")}
+          ${[44, 58].map((y, r) => [0, 1, 2, 3].map((i) => `<path d="M${58 + i * 22 + r * 11} ${y} q11 12 22 0"/>`).join("")).join("")}
+        </g>`;
+      case "heart":
+        return `<g clip-path="url(#${clip})" fill="${d}">
+          <path d="M70 170 C 46 154, 48 130, 70 140 C 92 130, 94 154, 70 170 Z"/>
+          <path d="M132 58 C 122 50, 122 40, 132 43 C 142 40, 142 50, 132 58 Z"/>
+          <polygon points="152,62 146,14 108,44"/>
+        </g>`;
+      case "stars":
+        return `<g clip-path="url(#${clip})" fill="${d}">
+          ${star(62, 150, 10)}${star(140, 160, 8)}${star(126, 134, 5)}${star(68, 54, 7)}${star(136, 56, 6)}${star(84, 182, 5)}${star(50, 98, 5)}
+        </g>`;
+      case "streaks":
+        return `<g clip-path="url(#${clip})" stroke="${d}" stroke-width="6" stroke-linecap="round" opacity="0.7">
+          <path d="M40 50 L80 70"/><path d="M36 70 L66 84"/><path d="M120 150 L164 172"/><path d="M114 168 L150 188"/><path d="M48 140 L78 156"/>
+        </g>`;
+      case "ring":
+        return `<g clip-path="url(#${clip})">
+          <path d="M40 150 Q100 176 160 150 L160 164 Q100 190 40 164 Z" fill="${d}" opacity=".75"/>
+          <path d="M42 50 Q100 30 158 50 L158 58 Q100 40 42 58 Z" fill="${d}" opacity=".45"/>
         </g>`;
       case "rainbow":
         return `<g clip-path="url(#${clip})" opacity="0.55" fill="none" stroke-width="7">
@@ -298,6 +427,20 @@
     return SLOTS.map((sl) => acc[sl.id]).filter(Boolean);
   }
 
+  /** Ohrformen: normal | fold (Faltohr) | tuft (Luchs-Pinsel) | big (Riesenohren) */
+  function earShape(c) {
+    if (c.ears === "fold") return { L: "50,60 60,36 90,46", R: "150,60 140,36 110,46", iL: "60,53 63,42 80,47", iR: "140,53 137,42 120,47", extra: "" };
+    if (c.ears === "big") return { L: "40,70 38,0 94,42", R: "160,70 162,0 106,42", iL: "50,60 47,16 84,44", iR: "150,60 153,16 116,44", extra: "" };
+    const e = { L: "48,62 54,14 92,44", R: "152,62 146,14 108,44", iL: "57,55 60,27 81,45", iR: "143,55 140,27 119,45", extra: "" };
+    if (c.ears === "tuft") e.extra = `<g stroke="${c.dark}" stroke-width="3.5" stroke-linecap="round"><path d="M54 16 L50 -2"/><path d="M54 16 L58 0"/><path d="M146 16 L150 -2"/><path d="M146 16 L142 0"/></g>`;
+    return e;
+  }
+  function fluffLayer(c, fill) {
+    if (!c.fluff) return "";
+    return `<g fill="${fill}" stroke="rgba(59,49,80,.16)" stroke-width="2" stroke-linejoin="round">
+      <polygon points="48,78 20,86 36,97 14,108 36,116 22,130 54,126"/><polygon points="152,78 180,86 164,97 186,108 164,116 178,130 146,126"/></g>`;
+  }
+
   /** catSVG(cat, {mood, acc, silhouette, cls}) – liefert einen SVG-String. */
   function catSVG(cat, opts) {
     opts = opts || {};
@@ -311,16 +454,17 @@
         <polygon points="48,62 54,14 92,44"/><polygon points="152,62 146,14 108,44"/></g>
         <text x="100" y="112" text-anchor="middle" font-size="58" font-weight="700" fill="var(--silhouette-q)">?</text></svg>`;
     }
-    const tailColor = c.pattern === "points" ? c.dark : c.fur;
-    const pawColor = c.pattern === "points" ? c.dark : (c.pattern === "tux" ? "#ffffff" : c.fur);
+    const tailColor = c.pattern === "points" || c.pattern === "socks" ? c.dark : c.fur;
+    const pawColor = c.pattern === "points" || c.pattern === "socks" ? c.dark : (c.pattern === "tux" || c.pattern === "bicolor" ? "#ffffff" : c.fur);
     const muzzle = c.pattern === "tux" ? "#ffffff" : c.belly;
-    const furFill = c.pattern === "magic" ? `url(#${id}g)` : c.fur;
+    const furFill = c.pattern === "magic" || c.pattern === "glitter" ? `url(#${id}g)` : c.fur;
     const parts = outfitList(opts.acc).map((a) => accessoryParts(a, id + "b"));
     const layer = (k) => parts.map((x) => x[k] || "").join("");
+    const E = earShape(c);
     return `<svg class="cat-svg ${opts.cls || ""}" viewBox="0 -12 200 222" aria-hidden="true">
       <defs>
         <clipPath id="${id}"><ellipse cx="100" cy="160" rx="50" ry="42"/><ellipse cx="100" cy="90" rx="62" ry="54"/>
-          <polygon points="48,62 54,14 92,44"/><polygon points="152,62 146,14 108,44"/></clipPath>
+          <polygon points="${E.L}"/><polygon points="${E.R}"/></clipPath>
         <clipPath id="${id}b"><ellipse cx="100" cy="160" rx="51" ry="43"/></clipPath>
         <radialGradient id="${id}g" cx="40%" cy="35%" r="75%"><stop offset="0%" stop-color="${c.belly}"/><stop offset="100%" stop-color="${c.fur}"/></radialGradient>
       </defs>
@@ -329,10 +473,11 @@
       <ellipse cx="100" cy="160" rx="50" ry="42" fill="${furFill}" stroke="rgba(59,49,80,.16)" stroke-width="2"/>
       <ellipse cx="100" cy="168" rx="${c.pattern === "tux" ? 32 : 27}" ry="${c.pattern === "tux" ? 34 : 28}" fill="${c.belly}"/>
       ${layer("body")}
-      <polygon points="48,62 54,14 92,44" fill="${furFill}" stroke="rgba(59,49,80,.16)" stroke-width="2" stroke-linejoin="round"/><polygon points="152,62 146,14 108,44" fill="${furFill}" stroke="rgba(59,49,80,.16)" stroke-width="2" stroke-linejoin="round"/>
+      <polygon points="${E.L}" fill="${furFill}" stroke="rgba(59,49,80,.16)" stroke-width="2" stroke-linejoin="round"/><polygon points="${E.R}" fill="${furFill}" stroke="rgba(59,49,80,.16)" stroke-width="2" stroke-linejoin="round"/>
+      ${E.extra}${fluffLayer(c, furFill)}
       <ellipse cx="100" cy="90" rx="62" ry="54" fill="${furFill}" stroke="rgba(59,49,80,.16)" stroke-width="2"/>
       ${patternLayer(c, id)}
-      <polygon points="57,55 60,27 81,45" fill="#f9a8c0"/><polygon points="143,55 140,27 119,45" fill="#f9a8c0"/>
+      <polygon points="${E.iL}" fill="#f9a8c0"/><polygon points="${E.iR}" fill="#f9a8c0"/>
       <ellipse cx="100" cy="112" rx="24" ry="15" fill="${muzzle}"/>
       <ellipse cx="80" cy="199" rx="15" ry="9" fill="${pawColor}" stroke="rgba(0,0,0,.08)"/>
       <ellipse cx="120" cy="199" rx="15" ry="9" fill="${pawColor}" stroke="rgba(0,0,0,.08)"/>
@@ -350,5 +495,5 @@
     </svg>`;
   }
 
-  window.Cats = { CATS, ACCESSORIES, SLOTS, byId, catSVG };
+  window.Cats = { CATS, ACCESSORIES, SLOTS, WORLDS, TRICKS, byId, catSVG, star };
 })();

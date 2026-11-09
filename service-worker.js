@@ -1,7 +1,7 @@
 /* Offline-fähig: App-Dateien werden gecacht. Bei neuer Version CACHE hochzählen. */
-const CACHE = "mathe-kaetzchen-v12";
+const CACHE = "mathe-kaetzchen-v13";
 const ASSETS = ["./", "./index.html", "./style.css", "./manifest.json",
-  "./js/cats.js", "./js/visuals.js", "./js/figures.js", "./js/ai.js", "./js/store.js", "./js/generators.js", "./js/app.js",
+  "./js/cats.js", "./js/visuals.js", "./js/figures.js", "./js/room.js", "./js/ai.js", "./js/store.js", "./js/generators.js", "./js/app.js",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((a) => new Request(a, { cache: "reload" }))))); self.skipWaiting(); });
